@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="pt">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title><%= title || 'Home' %></title>
+    <link rel="stylesheet" href="/css/app.css" />
+  </head>
+  <body>
+    <main class="page">
+      <section class="card">
+        <h1>Bem-vindo</h1>
+        <p class="muted">Login efetuado com sucesso.</p>
+        <% if (user && user.nome) { %>
+          <p>Ola, <strong><%= user.nome %></strong>.</p>
+        <% } %>
+        <form method="GET" action="/logout">
+          <button type="submit" class="secondary">Sair</button>
+        </form>
+      </section>
+    </main>
+  </body>
+</html>
