@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="pt">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title><%= title || 'Partilhar' %></title>
+    <link rel="stylesheet" href="/css/app.css" />
+    <script src="/js/fontawesome.min.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>Partilhar finanças</h1>
+        <p class="muted">Liga outra conta ao mesmo grupo.</p>
+      </div>
+      <form method="GET" action="/logout">
+        <button type="submit" class="secondary">Sair</button>
+      </form>
+    </header>
+
+    <main class="container">
+      <%- include('partials/nav') %>
+
+      <% if (notice) { %>
+        <div class="notice"><%= notice %></div>
+      <% } %>
+      <% if (error) { %>
+        <div class="error-box"><%= error %></div>
+      <% } %>
+
+      <section class="grid two">
+        <div class="card">
+          <h2>Partilhar</h2>
+          <form method="POST" action="/share" class="stack">
+            <label class="field">
+              <span>Email do outro utilizador</span>
+              <input name="email" type="email" required />
+            </label>
+            <button type="submit">Partilhar</button>
+          </form>
+          <p class="muted">O outro utilizador passa a ver os mesmos dados.</p>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

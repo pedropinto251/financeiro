@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="pt">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title><%= title || 'Dashboard' %></title>
+    <link rel="stylesheet" href="/css/app.css" />
+    <script src="/js/fontawesome.min.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>Dashboard</h1>
+        <p class="muted">Bem-vindo, <%= user && user.nome ? user.nome : 'utilizador' %></p>
+      </div>
+      <form method="GET" action="/logout">
+        <button type="submit" class="secondary">Sair</button>
+      </form>
+    </header>
+
+    <main class="container">
+      <%- include('partials/nav') %>
+
+      <% if (notice) { %>
+        <div class="notice"><%= notice %></div>
+      <% } %>
+      <% if (error) { %>
+        <div class="error-box"><%= error %></div>
+      <% } %>
+
+      <section class="grid cards">
+        <div class="card">
+          <h2>Saldo mensal</h2>
+          <p class="value"><%= (summary.income - summary.expense).toFixed(2) %> €</p>
+          <p class="muted">Receitas: <%= summary.income.toFixed(2) %> €</p>
+          <p class="muted">Despesas: <%= summary.expense.toFixed(2) %> €</p>
+        </div>
+        <div class="card">
+          <h2>Gasto por categoria</h2>
+          <% if (byCategory.length === 0) { %>
+            <p class="muted">Sem despesas este mês.</p>
+          <% } else { %>
+            <ul class="list">
+              <% byCategory.forEach((row) => { %>
+                <li><span><%= row.nome %></span><strong><%= Number(row.total).toFixed(2) %> €</strong></li>
+              <% }) %>
+            </ul>
+          <% } %>
+        </div>
+        <div class="card">
+          <h2>Evolucao 6 meses</h2>
+          <ul class="list">
+            <% series.forEach((row) => { %>
+              <li>
+                <span><%= row.mes %></span>
+                <strong><%= (row.total_income - row.total_expense).toFixed(2) %> €</strong>
+              </li>
+            <% }) %>
+          </ul>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

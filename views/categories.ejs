@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="pt">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title><%= title || 'Categorias' %></title>
+    <link rel="stylesheet" href="/css/app.css" />
+    <script src="/js/fontawesome.min.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>Categorias</h1>
+        <p class="muted">Organize despesas e receitas.</p>
+      </div>
+      <form method="GET" action="/logout">
+        <button type="submit" class="secondary">Sair</button>
+      </form>
+    </header>
+
+    <main class="container">
+      <%- include('partials/nav') %>
+
+      <% if (notice) { %>
+        <div class="notice"><%= notice %></div>
+      <% } %>
+      <% if (error) { %>
+        <div class="error-box"><%= error %></div>
+      <% } %>
+
+      <section class="grid two">
+        <div class="card">
+          <h2>Criar categoria</h2>
+          <form method="POST" action="/categories" class="stack">
+            <label class="field">
+              <span>Nome</span>
+              <input name="name" type="text" required />
+            </label>
+            <label class="field">
+              <span>Tipo</span>
+              <select name="type">
+                <option value="expense">Despesa</option>
+                <option value="income">Receita</option>
+              </select>
+            </label>
+            <button type="submit">Adicionar</button>
+          </form>
+        </div>
+
+        <div class="card">
+          <h2>Lista de categorias</h2>
+          <% if (categories.length === 0) { %>
+            <p class="muted">Ainda nao existem categorias.</p>
+          <% } else { %>
+            <ul class="list">
+              <% categories.forEach((cat) => { %>
+                <li>
+                  <span><%= cat.nome %></span>
+                  <strong><%= cat.tipo === 'income' ? 'Receita' : 'Despesa' %></strong>
+                </li>
+              <% }) %>
+            </ul>
+          <% } %>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

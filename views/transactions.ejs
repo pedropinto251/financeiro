@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="pt">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title><%= title || 'Movimentos' %></title>
+    <link rel="stylesheet" href="/css/app.css" />
+    <script src="/js/fontawesome.min.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>Movimentos</h1>
+        <p class="muted">Registe receitas e despesas.</p>
+      </div>
+      <form method="GET" action="/logout">
+        <button type="submit" class="secondary">Sair</button>
+      </form>
+    </header>
+
+    <main class="container">
+      <%- include('partials/nav') %>
+
+      <% if (notice) { %>
+        <div class="notice"><%= notice %></div>
+      <% } %>
+      <% if (error) { %>
+        <div class="error-box"><%= error %></div>
+      <% } %>
+
+      <section class="grid two">
+        <div class="card">
+          <h2>Adicionar movimento</h2>
+          <form method="POST" action="/transactions" enctype="multipart/form-data" class="stack">
+            <label class="field">
+              <span>Tipo</span>
+              <select name="type" required>
+                <option value="expense">Despesa</option>
+                <option value="income">Receita</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Valor</span>
+              <input name="amount" type="number" step="0.01" required />
+            </label>
+            <label class="field">
+              <span>Data</span>
+              <input name="date" type="date" required />
+            </label>
+            <label class="field">
+              <span>Descricao</span>
+              <input name="description" type="text" />
+            </label>
+            <label class="field">
+              <span>Fonte</span>
+              <input name="source" type="text" />
+            </label>
+            <label class="field">
+              <span>Categoria</span>
+              <select name="category_id">
+                <option value="">Sem categoria</option>
+                <% categories.forEach((cat) => { %>
+                  <option value="<%= cat.id %>"><%= cat.nome %> (<%= cat.tipo === 'income' ? 'Receita' : 'Despesa' %>)</option>
+                <% }) %>
+              </select>
+            </label>
+            <label class="field">
+              <span>Documento</span>
+              <input name="documento" type="file" />
+            </label>
+            <button type="submit">Guardar</button>
+          </form>
+        </div>
+
+        <div class="card">
+          <h2>Movimentos recentes</h2>
+          <% if (recent.length === 0) { %>
+            <p class="muted">Sem movimentos ainda.</p>
+          <% } else { %>
+            <ul class="list">
+              <% recent.forEach((row) => { %>
+                <li>
+                  <span>
+                    <%= row.data_ocorrencia %> - <%= row.categoria_nome || 'Sem categoria' %>
+                    <% if (row.document_id) { %>
+                      <a class="doc-link" href="/documents/<%= row.document_id %>">Documento</a>
+                    <% } %>
+                  </span>
+                  <strong class="<%= row.tipo === 'income' ? 'income' : 'expense' %>">
+                    <%= row.tipo === 'income' ? '+' : '-' %><%= Number(row.valor).toFixed(2) %> €
+                  </strong>
+                </li>
+              <% }) %>
+            </ul>
+          <% } %>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

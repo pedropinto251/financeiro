@@ -97,7 +97,7 @@ app.use('/', homeRoutes);
 // 404
 app.use((req, res) => {
 	if (req.session && req.session.simUser) {
-		return res.redirect('/home');
+		return res.redirect('/dashboard');
 	}
 	return res.redirect('/login');
 });
@@ -107,7 +107,7 @@ app.use((err, req, res, next) => {
 	console.error(err);
 	if (res.headersSent) return next(err);
 	if (req.session && req.session.simUser) {
-		return res.redirect('/home');
+		return res.redirect('/dashboard');
 	}
 	return res.redirect('/login');
 });

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="pt">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title><%= title || 'Budgets' %></title>
+    <link rel="stylesheet" href="/css/app.css" />
+    <script src="/js/fontawesome.min.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>Budgets</h1>
+        <p class="muted">Defina limites por categoria e mes.</p>
+      </div>
+      <form method="GET" action="/logout">
+        <button type="submit" class="secondary">Sair</button>
+      </form>
+    </header>
+
+    <main class="container">
+      <%- include('partials/nav') %>
+
+      <% if (notice) { %>
+        <div class="notice"><%= notice %></div>
+      <% } %>
+      <% if (error) { %>
+        <div class="error-box"><%= error %></div>
+      <% } %>
+
+      <section class="grid two">
+        <div class="card">
+          <h2>Definir budget</h2>
+          <form method="POST" action="/budgets" class="stack">
+            <label class="field">
+              <span>Categoria</span>
+              <select name="category_id" required>
+                <% categories.forEach((cat) => { %>
+                  <option value="<%= cat.id %>"><%= cat.nome %> (<%= cat.tipo === 'income' ? 'Receita' : 'Despesa' %>)</option>
+                <% }) %>
+              </select>
+            </label>
+            <label class="field">
+              <span>Mes</span>
+              <input name="month" type="month" required />
+            </label>
+            <label class="field">
+              <span>Valor</span>
+              <input name="amount" type="number" step="0.01" required />
+            </label>
+            <button type="submit">Guardar</button>
+          </form>
+        </div>
+
+        <div class="card">
+          <h2>Budgets atuais</h2>
+          <% if (budgets.length === 0) { %>
+            <p class="muted">Ainda nao existem budgets.</p>
+          <% } else { %>
+            <ul class="list">
+              <% budgets.forEach((row) => { %>
+                <li>
+                  <span><%= row.mes %> - <%= row.categoria_nome %></span>
+                  <strong><%= Number(row.valor).toFixed(2) %> €</strong>
+                </li>
+              <% }) %>
+            </ul>
+          <% } %>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

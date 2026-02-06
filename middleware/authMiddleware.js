@@ -3,7 +3,7 @@ function ensureAuth(req, res, next) {
     req.user = req.session.simUser;
     return next();
   }
-  const redirect = encodeURIComponent(req.originalUrl || '/home');
+  const redirect = encodeURIComponent(req.originalUrl || '/dashboard');
   return res.redirect(`/login?redirect=${redirect}`);
 }
 

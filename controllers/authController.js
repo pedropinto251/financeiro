@@ -1,4 +1,5 @@
 const { getSimUserByEmail, validateSimPassword } = require('../models/simulatorUserModel');
+const { ensureGroupForUser } = require('../models/financeGroupModel');
 
 function renderLogin(req, res) {
   res.render('login', {
@@ -26,13 +27,15 @@ async function handleLogin(req, res, next) {
     if (!ok) {
       return res.redirect(`/login?error=invalid&email=${encodeURIComponent(email)}`);
     }
+    const groupId = await ensureGroupForUser(user);
     req.session.simUser = {
       id: user.id,
       email: user.email,
       nome: user.nome,
       role: user.role,
+      finance_group_id: groupId,
     };
-    const redirect = req.query.redirect ? decodeURIComponent(req.query.redirect) : '/home';
+    const redirect = req.query.redirect ? decodeURIComponent(req.query.redirect) : '/dashboard';
     return res.redirect(redirect);
   } catch (err) {
     return next(err);
