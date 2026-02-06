@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="pt">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title><%= title || 'Utilizadores' %></title>
+    <link rel="stylesheet" href="/css/app.css" />
+    <script src="/js/fontawesome.min.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>Utilizadores</h1>
+        <p class="muted">Criar contas apenas para admin.</p>
+      </div>
+    </header>
+
+    <main class="container">
+      <%- include('partials/nav') %>
+
+      <% if (notice) { %>
+        <div class="notice"><%= notice %></div>
+      <% } %>
+      <% if (error) { %>
+        <div class="error-box"><%= error %></div>
+      <% } %>
+
+      <section class="grid two">
+        <div class="card">
+          <h2>Novo utilizador</h2>
+          <form method="POST" action="/admin/users" class="stack">
+            <label class="field">
+              <span>Nome</span>
+              <input name="name" type="text" required />
+            </label>
+            <label class="field">
+              <span>Email</span>
+              <input name="email" type="email" required />
+            </label>
+            <label class="field">
+              <span>Password</span>
+              <input name="password" type="password" required />
+            </label>
+            <label class="field">
+              <span>Role</span>
+              <select name="role">
+                <option value="user">Utilizador</option>
+                <option value="admin">Admin</option>
+              </select>
+            </label>
+            <button type="submit">Criar</button>
+          </form>
+        </div>
+
+        <div class="card">
+          <h2>Utilizadores</h2>
+          <% if (!users || users.length === 0) { %>
+            <p class="muted">Sem utilizadores.</p>
+          <% } else { %>
+            <ul class="list">
+              <% users.forEach((u) => { %>
+                <li>
+                  <div>
+                    <strong><%= u.nome %></strong>
+                    <div class="tx-desc"><%= u.email %></div>
+                    <div class="tx-desc">Role: <%= u.role %></div>
+                    <% if (u.ativo === 0) { %>
+                      <div class="tx-desc">Inativo</div>
+                    <% } %>
+                  </div>
+                  <div class="tx-actions">
+                    <button
+                      type="button"
+                      class="icon-btn user-edit"
+                      data-id="<%= u.id %>"
+                      data-name="<%= u.nome %>"
+                      data-email="<%= u.email %>"
+                      data-role="<%= u.role %>"
+                      data-active="<%= u.ativo %>"
+                    >
+                      Editar
+                    </button>
+                  </div>
+                </li>
+              <% }) %>
+            </ul>
+          <% } %>
+        </div>
+      </section>
+    </main>
+
+    <div class="modal-overlay" id="user-edit-modal">
+      <div class="modal">
+        <div class="modal-header">
+          <h2>Editar utilizador</h2>
+          <button type="button" class="modal-close" data-close="user-edit-modal">Fechar</button>
+        </div>
+        <form method="POST" action="/admin/users/update" class="stack" id="user-edit-form">
+          <input type="hidden" name="user_id" id="user-edit-id" />
+          <label class="field">
+            <span>Nome</span>
+            <input name="name" id="user-edit-name" type="text" required />
+          </label>
+          <label class="field">
+            <span>Email</span>
+            <input name="email" id="user-edit-email" type="email" required />
+          </label>
+          <label class="field">
+            <span>Role</span>
+            <select name="role" id="user-edit-role">
+              <option value="user">Utilizador</option>
+              <option value="admin">Admin</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Estado</span>
+            <select name="active" id="user-edit-active">
+              <option value="1">Ativo</option>
+              <option value="0">Inativo</option>
+            </select>
+          </label>
+          <button type="submit">Guardar</button>
+        </form>
+      </div>
+    </div>
+
+    <script>
+      const userEditModal = document.getElementById('user-edit-modal');
+      const userEditId = document.getElementById('user-edit-id');
+      const userEditName = document.getElementById('user-edit-name');
+      const userEditEmail = document.getElementById('user-edit-email');
+      const userEditRole = document.getElementById('user-edit-role');
+      const userEditActive = document.getElementById('user-edit-active');
+
+      const openModal = (modal) => modal && modal.classList.add('open');
+      const closeModal = (modal) => modal && modal.classList.remove('open');
+
+      document.querySelectorAll('.user-edit').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          if (userEditId) userEditId.value = btn.dataset.id || '';
+          if (userEditName) userEditName.value = btn.dataset.name || '';
+          if (userEditEmail) userEditEmail.value = btn.dataset.email || '';
+          if (userEditRole) userEditRole.value = btn.dataset.role || 'user';
+          if (userEditActive) userEditActive.value = btn.dataset.active || '1';
+          openModal(userEditModal);
+        });
+      });
+
+      document.querySelectorAll('[data-close]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const id = btn.dataset.close;
+          closeModal(document.getElementById(id));
+        });
+      });
+
+      if (userEditModal) {
+        userEditModal.addEventListener('click', (e) => {
+          if (e.target === userEditModal) closeModal(userEditModal);
+        });
+      }
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeModal(userEditModal);
+      });
+    </script>
+  </body>
+</html>

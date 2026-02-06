@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="pt">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title><%= title || 'Planeamento' %></title>
+    <link rel="stylesheet" href="/css/app.css" />
+    <script src="/js/fontawesome.min.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>Planeamento</h1>
+        <p class="muted">Projetos, listas e artigos.</p>
+      </div>
+    </header>
+
+    <main class="container">
+      <%- include('partials/nav') %>
+
+      <% if (notice) { %>
+        <div class="notice"><%= notice %></div>
+      <% } %>
+      <% if (error) { %>
+        <div class="error-box"><%= error %></div>
+      <% } %>
+
+      <section class="grid two">
+        <div class="card">
+          <div class="wishlist-actions">
+            <button type="button" class="secondary" id="open-project">Novo projeto</button>
+            <button type="button" class="secondary" id="open-list">Nova lista</button>
+            <button type="button" class="secondary" id="open-item">Novo artigo</button>
+            <button type="button" class="secondary" id="open-share">Partilhar</button>
+          </div>
+          <label class="field">
+            <span>Filtrar por projeto</span>
+            <select id="wishlist-project-filter">
+              <option value="">Todos</option>
+              <% projects.forEach((project) => { %>
+                <option value="<%= project.id %>"><%= project.nome %></option>
+              <% }) %>
+            </select>
+          </label>
+        </div>
+
+        <div class="card">
+          <h2>Artigos planeados</h2>
+          <% const planned = items.filter((i) => i.estado === 'planned'); %>
+          <% if (planned.length === 0) { %>
+            <p class="muted">Sem artigos planeados.</p>
+          <% } else { %>
+            <ul class="list wishlist-list" id="wishlist-planned">
+              <% planned.forEach((item) => { %>
+                <li data-project="<%= item.project_id %>" data-id="<%= item.id %>" data-name="<%= item.nome %>" data-desc="<%= item.descricao || '' %>" data-price="<%= item.preco || '' %>" data-target="<%= item.data_alvo || '' %>" data-link="<%= item.link_url || '' %>" data-list="<%= item.list_id %>">
+                  <div>
+                    <strong><%= item.project_nome %> / <%= item.list_nome %></strong>
+                    <div><%= item.nome %></div>
+                    <% if (item.preco) { %>
+                      <span class="tx-desc"> · <%= Number(item.preco).toFixed(2) %> €</span>
+                    <% } %>
+                    <% if (item.data_alvo) { %>
+                      <span class="tx-desc"> · <%= dateDisplay(item.data_alvo) %></span>
+                    <% } %>
+                  </div>
+                  <% if (item.imagem_path) { %>
+                    <img class="wishlist-img" src="/wishlist/image/<%= item.id %>" alt="Imagem" />
+                  <% } %>
+                  <div class="tx-actions">
+                    <button type="button" class="icon-btn wishlist-edit">Editar</button>
+                    <% if (item.link_url) { %>
+                      <a class="icon-btn" href="<%= item.link_url %>" target="_blank" rel="noopener">Abrir</a>
+                    <% } %>
+                    <button type="button" class="icon-btn wishlist-buy" data-item="<%= item.id %>" data-name="<%= item.nome %>">Marcar comprado</button>
+                    <form method="POST" action="/wishlist/delete" class="inline-form">
+                      <input type="hidden" name="item_id" value="<%= item.id %>" />
+                      <button type="submit" class="icon-btn danger">Apagar</button>
+                    </form>
+                  </div>
+                </li>
+              <% }) %>
+            </ul>
+          <% } %>
+        </div>
+      </section>
+
+      <section class="grid two">
+        <div class="card">
+          <h2>Comprados</h2>
+          <% const purchased = items.filter((i) => i.estado === 'purchased'); %>
+          <% if (purchased.length === 0) { %>
+            <p class="muted">Ainda nao existem compras.</p>
+          <% } else { %>
+            <ul class="list wishlist-list" id="wishlist-purchased">
+              <% purchased.forEach((item) => { %>
+                <li data-project="<%= item.project_id %>" data-id="<%= item.id %>" data-name="<%= item.nome %>" data-desc="<%= item.descricao || '' %>" data-price="<%= item.preco || '' %>" data-target="<%= item.data_compra || '' %>" data-link="<%= item.link_url || '' %>" data-list="<%= item.list_id %>">
+                  <div>
+                    <strong><%= item.project_nome %> / <%= item.list_nome %></strong>
+                    <div><%= item.nome %></div>
+                    <% if (item.preco) { %>
+                      <span class="tx-desc"> · <%= Number(item.preco).toFixed(2) %> €</span>
+                    <% } %>
+                    <% if (item.data_compra) { %>
+                      <span class="tx-desc"> · <%= dateDisplay(item.data_compra) %></span>
+                    <% } %>
+                  </div>
+                  <% if (item.imagem_path) { %>
+                    <img class="wishlist-img" src="/wishlist/image/<%= item.id %>" alt="Imagem" />
+                  <% } %>
+                  <div class="tx-actions">
+                    <button type="button" class="icon-btn wishlist-edit">Editar</button>
+                    <% if (item.link_url) { %>
+                      <a class="icon-btn" href="<%= item.link_url %>" target="_blank" rel="noopener">Abrir</a>
+                    <% } %>
+                    <form method="POST" action="/wishlist/revert" class="inline-form">
+                      <input type="hidden" name="item_id" value="<%= item.id %>" />
+                      <button type="submit" class="icon-btn">Voltar a planeado</button>
+                    </form>
+                    <form method="POST" action="/wishlist/delete" class="inline-form">
+                      <input type="hidden" name="item_id" value="<%= item.id %>" />
+                      <button type="submit" class="icon-btn danger">Apagar</button>
+                    </form>
+                  </div>
+                </li>
+              <% }) %>
+            </ul>
+          <% } %>
+        </div>
+      </section>
+
+      <section class="grid two">
+        <div class="card">
+          <h2>Partilhados comigo</h2>
+          <% if (!sharedItems || sharedItems.length === 0) { %>
+            <p class="muted">Sem listas partilhadas.</p>
+          <% } else { %>
+            <ul class="list wishlist-list">
+              <% sharedItems.forEach((item) => { %>
+                <li data-project="<%= item.project_id %>">
+                  <div>
+                    <strong><%= item.project_nome %> / <%= item.list_nome %></strong>
+                    <div><%= item.nome %></div>
+                    <% if (item.preco) { %>
+                      <span class="tx-desc"> · <%= Number(item.preco).toFixed(2) %> €</span>
+                    <% } %>
+                    <% if (item.data_alvo) { %>
+                      <span class="tx-desc"> · <%= dateDisplay(item.data_alvo) %></span>
+                    <% } %>
+                    <% if (item.data_compra) { %>
+                      <span class="tx-desc"> · <%= dateDisplay(item.data_compra) %></span>
+                    <% } %>
+                  </div>
+                  <% if (item.imagem_path) { %>
+                    <img class="wishlist-img" src="/wishlist/image/<%= item.id %>" alt="Imagem" />
+                  <% } %>
+                  <% if (item.link_url) { %>
+                    <div class="tx-actions">
+                      <a class="icon-btn" href="<%= item.link_url %>" target="_blank" rel="noopener">Abrir</a>
+                    </div>
+                  <% } %>
+                </li>
+              <% }) %>
+            </ul>
+          <% } %>
+        </div>
+      </section>
+    </main>
+
+    <div class="modal-overlay" id="wishlist-project-modal">
+      <div class="modal">
+        <div class="modal-header">
+          <h2>Novo projeto</h2>
+          <button type="button" class="modal-close" data-close="wishlist-project-modal">Fechar</button>
+        </div>
+        <form method="POST" action="/wishlist/project" class="stack">
+          <label class="field">
+            <span>Nome do projeto</span>
+            <input name="name" type="text" required />
+          </label>
+          <label class="field">
+            <span>Nota</span>
+            <input name="note" type="text" />
+          </label>
+          <button type="submit">Criar projeto</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="wishlist-list-modal">
+      <div class="modal">
+        <div class="modal-header">
+          <h2>Nova lista</h2>
+          <button type="button" class="modal-close" data-close="wishlist-list-modal">Fechar</button>
+        </div>
+        <form method="POST" action="/wishlist/list" class="stack">
+          <label class="field">
+            <span>Projeto</span>
+            <select name="project_id" required>
+              <% projects.forEach((project) => { %>
+                <option value="<%= project.id %>"><%= project.nome %></option>
+              <% }) %>
+            </select>
+          </label>
+          <label class="field">
+            <span>Nome da lista</span>
+            <input name="name" type="text" required />
+          </label>
+          <button type="submit">Criar lista</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="wishlist-item-modal">
+      <div class="modal modal-scroll">
+        <div class="modal-header">
+          <h2>Novo artigo</h2>
+          <button type="button" class="modal-close" data-close="wishlist-item-modal">Fechar</button>
+        </div>
+        <form method="POST" action="/wishlist" enctype="multipart/form-data" class="stack" id="wishlist-item-form">
+          <input type="hidden" name="item_id" id="edit-item-id" />
+          <label class="field">
+            <span>Projeto</span>
+            <select name="project_id" id="wl-project" required>
+              <% projects.forEach((project) => { %>
+                <option value="<%= project.id %>"><%= project.nome %></option>
+              <% }) %>
+            </select>
+          </label>
+          <label class="field">
+            <span>Lista</span>
+            <select name="list_id" id="wl-list" required>
+              <% projects.forEach((project) => { %>
+                <% (listsByProject.get(project.id) || []).forEach((list) => { %>
+                  <option value="<%= list.id %>" data-project="<%= project.id %>"><%= project.nome %> / <%= list.nome %></option>
+                <% }) %>
+              <% }) %>
+            </select>
+          </label>
+          <label class="field">
+            <span>Nome</span>
+            <input name="name" id="edit-name" type="text" required />
+          </label>
+          <label class="field">
+            <span>Descricao</span>
+            <input name="description" id="edit-desc" type="text" />
+          </label>
+          <label class="field">
+            <span>Preco</span>
+            <input name="price" id="edit-price" type="number" step="0.01" />
+          </label>
+          <label class="field">
+            <span>Data alvo</span>
+            <input name="target_date" id="edit-target" type="date" />
+          </label>
+          <label class="field">
+            <span>Foto</span>
+            <input name="image" type="file" accept="image/*" />
+          </label>
+          <label class="field">
+            <span>Link</span>
+            <input name="link_url" id="edit-link" type="url" />
+          </label>
+
+          <label class="field switch">
+            <input type="checkbox" id="wishlist-purchased-toggle" />
+            <span>Ja comprado</span>
+          </label>
+
+          <div id="wishlist-purchased-fields" class="hidden">
+            <label class="field">
+              <span>Data de compra</span>
+              <input name="purchased_date" type="date" />
+            </label>
+            <label class="field">
+              <span>Categoria (despesa)</span>
+              <select name="category_id">
+                <option value="">Sem categoria</option>
+                <% expenseCategories.forEach((cat) => { %>
+                  <option value="<%= cat.id %>"><%= cat.nome %></option>
+                <% }) %>
+              </select>
+            </label>
+          </div>
+
+          <button type="submit">Guardar</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="wishlist-share-modal">
+      <div class="modal">
+        <div class="modal-header">
+          <h2>Partilhar projeto/lista</h2>
+          <button type="button" class="modal-close" data-close="wishlist-share-modal">Fechar</button>
+        </div>
+        <form method="POST" action="/wishlist/share" class="stack">
+          <label class="field">
+            <span>Email do utilizador</span>
+            <input name="email" type="email" required />
+          </label>
+          <label class="field">
+            <span>Projeto</span>
+            <select name="project_id" id="share-project" required>
+              <% projects.forEach((project) => { %>
+                <option value="<%= project.id %>"><%= project.nome %></option>
+              <% }) %>
+            </select>
+          </label>
+          <label class="field">
+            <span>Lista (opcional)</span>
+            <select name="list_id" id="share-list">
+              <option value="">Projeto inteiro</option>
+              <% projects.forEach((project) => { %>
+                <% (listsByProject.get(project.id) || []).forEach((list) => { %>
+                  <option value="<%= list.id %>" data-project="<%= project.id %>"><%= project.nome %> / <%= list.nome %></option>
+                <% }) %>
+              <% }) %>
+            </select>
+          </label>
+          <label class="field">
+            <span>Permissao</span>
+            <select name="permission" required>
+              <option value="view">Ver</option>
+              <option value="edit">Editar</option>
+              <option value="mark">Marcar como comprado</option>
+              <option value="delete">Apagar</option>
+              <option value="all">Todas</option>
+            </select>
+          </label>
+          <button type="submit">Partilhar</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="wishlist-purchase-modal">
+      <div class="modal">
+        <div class="modal-header">
+          <h2 id="purchase-title">Marcar comprado</h2>
+          <button type="button" class="modal-close" data-close="wishlist-purchase-modal">Fechar</button>
+        </div>
+        <form method="POST" action="/wishlist/purchased" class="stack" id="wishlist-purchase-form">
+          <input type="hidden" name="item_id" id="purchase-item-id" />
+          <label class="field">
+            <span>Data de compra</span>
+            <input name="purchased_date" id="purchase-date" type="date" required />
+          </label>
+          <label class="field">
+            <span>Preco (opcional)</span>
+            <input name="price" type="number" step="0.01" />
+          </label>
+          <label class="field">
+            <span>Categoria (despesa)</span>
+            <select name="category_id">
+              <option value="">Sem categoria</option>
+              <% expenseCategories.forEach((cat) => { %>
+                <option value="<%= cat.id %>"><%= cat.nome %></option>
+              <% }) %>
+            </select>
+          </label>
+          <button type="submit">Confirmar</button>
+        </form>
+      </div>
+    </div>
+
+    <script>
+      const projectSelect = document.getElementById('wl-project');
+      const listSelect = document.getElementById('wl-list');
+      function filterLists() {
+        const projectId = projectSelect.value;
+        Array.from(listSelect.options).forEach((opt) => {
+          const show = opt.dataset.project === projectId;
+          opt.hidden = !show;
+          if (!show && opt.selected) opt.selected = false;
+        });
+        const firstVisible = Array.from(listSelect.options).find((opt) => !opt.hidden);
+        if (firstVisible) firstVisible.selected = true;
+      }
+      if (projectSelect && listSelect) {
+        projectSelect.addEventListener('change', filterLists);
+        filterLists();
+      }
+
+      const shareProject = document.getElementById('share-project');
+      const shareList = document.getElementById('share-list');
+      function filterShareLists() {
+        const projectId = shareProject.value;
+        Array.from(shareList.options).forEach((opt) => {
+          if (!opt.dataset.project) return;
+          const show = opt.dataset.project === projectId;
+          opt.hidden = !show;
+        });
+      }
+      if (shareProject && shareList) {
+        shareProject.addEventListener('change', filterShareLists);
+        filterShareLists();
+      }
+
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const dd = String(today.getDate()).padStart(2, '0');
+
+      const purchaseDateInput = document.getElementById('purchase-date');
+      if (purchaseDateInput) purchaseDateInput.value = `${yyyy}-${mm}-${dd}`;
+
+      const toggle = document.getElementById('wishlist-purchased-toggle');
+      const purchasedFields = document.getElementById('wishlist-purchased-fields');
+      if (toggle && purchasedFields) {
+        toggle.addEventListener('change', () => {
+          purchasedFields.classList.toggle('hidden', !toggle.checked);
+        });
+      }
+
+      const openProject = document.getElementById('open-project');
+      const openList = document.getElementById('open-list');
+      const openItem = document.getElementById('open-item');
+      const openShare = document.getElementById('open-share');
+      function openModal(id) {
+        const modal = document.getElementById(id);
+        if (modal) modal.classList.add('open');
+      }
+      if (openProject) openProject.addEventListener('click', () => openModal('wishlist-project-modal'));
+      if (openList) openList.addEventListener('click', () => openModal('wishlist-list-modal'));
+      if (openItem) openItem.addEventListener('click', () => openModal('wishlist-item-modal'));
+      if (openShare) openShare.addEventListener('click', () => openModal('wishlist-share-modal'));
+
+      document.querySelectorAll('.modal-close').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const target = btn.dataset.close;
+          const modal = document.getElementById(target);
+          if (modal) modal.classList.remove('open');
+        });
+      });
+      document.querySelectorAll('.modal-overlay').forEach((overlay) => {
+        overlay.addEventListener('click', (e) => {
+          if (e.target === overlay) overlay.classList.remove('open');
+        });
+      });
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          document.querySelectorAll('.modal-overlay').forEach((overlay) => overlay.classList.remove('open'));
+        }
+      });
+
+      document.querySelectorAll('.wishlist-buy').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const id = btn.dataset.item;
+          const name = btn.dataset.name || 'Item';
+          const modal = document.getElementById('wishlist-purchase-modal');
+          const title = document.getElementById('purchase-title');
+          const hidden = document.getElementById('purchase-item-id');
+          if (title) title.textContent = `Marcar comprado: ${name}`;
+          if (hidden) hidden.value = id;
+          if (modal) modal.classList.add('open');
+        });
+      });
+
+      document.querySelectorAll('.wishlist-edit').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const li = btn.closest('li');
+          if (!li) return;
+          document.getElementById('edit-item-id').value = li.dataset.id;
+          document.getElementById('edit-name').value = li.dataset.name;
+          document.getElementById('edit-desc').value = li.dataset.desc;
+          document.getElementById('edit-price').value = li.dataset.price;
+          document.getElementById('edit-target').value = li.dataset.target ? li.dataset.target.slice(0, 10) : '';
+          document.getElementById('edit-link').value = li.dataset.link;
+          document.getElementById('wl-list').value = li.dataset.list;
+          const modal = document.getElementById('wishlist-item-modal');
+          if (modal) modal.classList.add('open');
+          const form = document.getElementById('wishlist-item-form');
+          if (form) form.action = '/wishlist/update';
+        });
+      });
+
+      const filterSelect = document.getElementById('wishlist-project-filter');
+      function applyFilter() {
+        const value = filterSelect.value;
+        document.querySelectorAll('#wishlist-planned li, #wishlist-purchased li').forEach((li) => {
+          if (!value) {
+            li.style.display = 'flex';
+          } else {
+            li.style.display = li.dataset.project === value ? 'flex' : 'none';
+          }
+        });
+      }
+      if (filterSelect) {
+        filterSelect.addEventListener('change', applyFilter);
+        applyFilter();
+      }
+    </script>
+  </body>
+</html>

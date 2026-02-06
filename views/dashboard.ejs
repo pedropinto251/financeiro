@@ -13,9 +13,6 @@
         <h1>Dashboard</h1>
         <p class="muted">Bem-vindo, <%= user && user.nome ? user.nome : 'utilizador' %></p>
       </div>
-      <form method="GET" action="/logout">
-        <button type="submit" class="secondary">Sair</button>
-      </form>
     </header>
 
     <main class="container">
@@ -62,17 +59,124 @@
           <% } %>
         </div>
         <div class="card">
-          <h2>Evolucao 6 meses</h2>
-          <div class="spark">
-            <% series.forEach((row) => { %>
-              <div class="spark-col">
-                <span class="spark-bar" style="height:<%= Math.min(100, Math.max(6, Math.round(Math.abs(row.total_income - row.total_expense) / 10))) %>%"></span>
-                <small><%= row.mes.slice(5,7) %>/<%= row.mes.slice(2,4) %></small>
-              </div>
-            <% }) %>
-          </div>
+          <h2>Objetivos</h2>
+          <% if (!goals || goals.length === 0) { %>
+            <p class="muted">Ainda nao existem objetivos.</p>
+          <% } else { %>
+            <p class="muted">Disponivel para alocar: <%= Number(availableTotal || 0).toFixed(2) %> €</p>
+            <ul class="list">
+              <% goals.forEach((goal) => { %>
+                <% const target = Number(goal.valor_objetivo || 0); %>
+                <% const allocated = Number(goal.total_alocado || 0); %>
+                <% const percent = target > 0 ? Math.min(100, Math.round((allocated / target) * 100)) : 0; %>
+                <li>
+                  <div>
+                    <strong><%= goal.nome %></strong>
+                    <div class="tx-desc">Alocado: <%= allocated.toFixed(2) %> € / <%= target.toFixed(2) %> €</div>
+                    <div class="bar-track" style="margin-top:0.35rem;">
+                      <span class="bar-fill" style="width:<%= percent %>%"></span>
+                    </div>
+                  </div>
+                  <div class="tx-actions">
+                    <button
+                      type="button"
+                      class="icon-btn goal-allocate"
+                      data-goal="<%= goal.id %>"
+                      data-name="<%= goal.nome %>"
+                      <%= Number(availableTotal || 0) <= 0 ? 'disabled' : '' %>
+                    >
+                      Alocar
+                    </button>
+                  </div>
+                </li>
+              <% }) %>
+            </ul>
+          <% } %>
         </div>
       </section>
     </main>
+
+    <div class="modal-overlay" id="allocation-modal">
+      <div class="modal">
+        <div class="modal-header">
+          <h2 id="allocation-title">Alocar poupanca</h2>
+          <button type="button" class="modal-close" data-close="allocation-modal">Fechar</button>
+        </div>
+        <form method="POST" action="/goals/allocate" class="stack" id="allocation-form">
+          <input type="hidden" name="back_to" value="/dashboard" />
+          <label class="field">
+            <span>Objetivo</span>
+            <select name="goal_id" id="allocation-goal" required>
+              <% goals.forEach((goal) => { %>
+                <option value="<%= goal.id %>"><%= goal.nome %></option>
+              <% }) %>
+            </select>
+          </label>
+          <label class="field">
+            <span>Valor a alocar (€)</span>
+            <input name="amount" id="allocation-amount" type="number" step="0.01" min="0.01" required />
+            <small class="muted">Disponivel: <%= Number(availableTotal || 0).toFixed(2) %> €</small>
+          </label>
+          <label class="field">
+            <span>Data</span>
+            <input name="date" id="allocation-date" type="date" required />
+          </label>
+          <label class="field">
+            <span>Nota (opcional)</span>
+            <input name="note" type="text" />
+          </label>
+          <button type="submit">Alocar</button>
+        </form>
+      </div>
+    </div>
+
+    <script>
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const dd = String(today.getDate()).padStart(2, '0');
+      const allocationDate = document.getElementById('allocation-date');
+      if (allocationDate) allocationDate.value = `${yyyy}-${mm}-${dd}`;
+
+      const allocationModal = document.getElementById('allocation-modal');
+      const allocationTitle = document.getElementById('allocation-title');
+      const allocationSelect = document.getElementById('allocation-goal');
+      const allocationAmount = document.getElementById('allocation-amount');
+      const available = Number('<%= Number(availableTotal || 0).toFixed(2) %>');
+
+      if (allocationAmount && available > 0) {
+        allocationAmount.max = available.toFixed(2);
+      }
+
+      const openModal = (modal) => modal && modal.classList.add('open');
+      const closeModal = (modal) => modal && modal.classList.remove('open');
+
+      document.querySelectorAll('.goal-allocate').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          if (available <= 0) return;
+          const id = btn.dataset.goal;
+          const name = btn.dataset.name || 'Objetivo';
+          if (allocationTitle) allocationTitle.textContent = `Alocar para: ${name}`;
+          if (allocationSelect) allocationSelect.value = id;
+          openModal(allocationModal);
+        });
+      });
+
+      document.querySelectorAll('[data-close]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const id = btn.dataset.close;
+          closeModal(document.getElementById(id));
+        });
+      });
+
+      if (allocationModal) {
+        allocationModal.addEventListener('click', (e) => {
+          if (e.target === allocationModal) closeModal(allocationModal);
+        });
+      }
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeModal(allocationModal);
+      });
+    </script>
   </body>
 </html>

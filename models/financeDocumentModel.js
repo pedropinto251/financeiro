@@ -20,7 +20,26 @@ async function getDocumentById(id) {
   return rows[0] || null;
 }
 
+async function listDocumentsByTransaction(groupId, transactionId) {
+  const [rows] = await pool.query(
+    `SELECT id, file_path
+     FROM finance_documents
+     WHERE finance_group_id = ? AND transaction_id = ?`,
+    [groupId, transactionId]
+  );
+  return rows;
+}
+
+async function deleteDocumentsByTransaction(groupId, transactionId) {
+  await pool.query(
+    `DELETE FROM finance_documents WHERE finance_group_id = ? AND transaction_id = ?`,
+    [groupId, transactionId]
+  );
+}
+
 module.exports = {
   createDocument,
   getDocumentById,
+  listDocumentsByTransaction,
+  deleteDocumentsByTransaction,
 };

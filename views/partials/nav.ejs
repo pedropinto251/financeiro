@@ -15,10 +15,24 @@
     <i class="fa-solid fa-bullseye"></i>
     <span>Budgets</span>
   </a>
+  <a href="/goals" class="nav-link <%= active === 'goals' ? 'active' : '' %>">
+    <i class="fa-solid fa-piggy-bank"></i>
+    <span>Objetivos</span>
+  </a>
   <a href="/share" class="nav-link <%= active === 'share' ? 'active' : '' %>">
     <i class="fa-solid fa-user-group"></i>
     <span>Partilhar</span>
   </a>
+  <a href="/wishlist" class="nav-link <%= active === 'wishlist' ? 'active' : '' %>">
+    <i class="fa-solid fa-list-check"></i>
+    <span>Planeamento</span>
+  </a>
+  <% if (user && user.role === 'admin') { %>
+    <a href="/admin/users" class="nav-link <%= active === 'admin-users' ? 'active' : '' %>">
+      <i class="fa-solid fa-user-shield"></i>
+      <span>Utilizadores</span>
+    </a>
+  <% } %>
 </nav>
 
 <nav class="nav nav-bottom">
@@ -34,12 +48,80 @@
     <i class="fa-solid fa-tags"></i>
     <span>Cat.</span>
   </a>
-  <a href="/budgets" class="nav-link <%= active === 'budgets' ? 'active' : '' %>">
-    <i class="fa-solid fa-bullseye"></i>
-    <span>Budgets</span>
-  </a>
-  <a href="/share" class="nav-link <%= active === 'share' ? 'active' : '' %>">
-    <i class="fa-solid fa-user-group"></i>
-    <span>Partilhar</span>
-  </a>
+    <a href="/budgets" class="nav-link <%= active === 'budgets' ? 'active' : '' %>">
+      <i class="fa-solid fa-bullseye"></i>
+      <span>Budgets</span>
+    </a>
+  <button type="button" class="nav-link menu-toggle" id="menu-open">
+    <i class="fa-solid fa-bars"></i>
+    <span>Menu</span>
+  </button>
 </nav>
+
+<div class="menu-overlay" id="menu-overlay">
+  <div class="menu-sheet">
+    <div class="menu-header">
+      <strong>Menu</strong>
+      <button type="button" class="menu-close" id="menu-close">Fechar</button>
+    </div>
+    <a href="/share" class="menu-item">
+      <i class="fa-solid fa-user-group"></i>
+      Partilhar
+    </a>
+    <a href="/wishlist" class="menu-item">
+      <i class="fa-solid fa-list-check"></i>
+      Planeamento
+    </a>
+    <a href="/dashboard" class="menu-item">
+      <i class="fa-solid fa-chart-line"></i>
+      Dashboard
+    </a>
+    <a href="/transactions" class="menu-item">
+      <i class="fa-solid fa-arrow-right-arrow-left"></i>
+      Movimentos
+    </a>
+    <a href="/categories" class="menu-item">
+      <i class="fa-solid fa-tags"></i>
+      Categorias
+    </a>
+    <a href="/budgets" class="menu-item">
+      <i class="fa-solid fa-bullseye"></i>
+      Budgets
+    </a>
+    <a href="/goals" class="menu-item">
+      <i class="fa-solid fa-piggy-bank"></i>
+      Objetivos
+    </a>
+    <% if (user && user.role === 'admin') { %>
+      <a href="/admin/users" class="menu-item">
+        <i class="fa-solid fa-user-shield"></i>
+        Utilizadores
+      </a>
+    <% } %>
+    <form method="GET" action="/logout" class="menu-item">
+      <button type="submit" class="menu-logout">
+        <i class="fa-solid fa-right-from-bracket"></i>
+        Sair
+      </button>
+    </form>
+  </div>
+</div>
+
+<script>
+  (() => {
+    const openBtn = document.getElementById('menu-open');
+    const closeBtn = document.getElementById('menu-close');
+    const overlay = document.getElementById('menu-overlay');
+    if (!openBtn || !closeBtn || !overlay) return;
+
+    const close = () => overlay.classList.remove('open');
+    openBtn.addEventListener('click', () => overlay.classList.add('open'));
+    closeBtn.addEventListener('click', close);
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) close();
+    });
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') close();
+    });
+  })();
+</script>

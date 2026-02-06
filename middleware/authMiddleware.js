@@ -7,4 +7,9 @@ function ensureAuth(req, res, next) {
   return res.redirect(`/login?redirect=${redirect}`);
 }
 
-module.exports = { ensureAuth };
+function ensureAdmin(req, res, next) {
+  if (req.user && req.user.role === 'admin') return next();
+  return res.redirect('/dashboard');
+}
+
+module.exports = { ensureAuth, ensureAdmin };
