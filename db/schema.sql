@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS finance_transactions (
 	tipo ENUM('expense','income') NOT NULL,
 	categoria_id INT NULL,
 	valor DECIMAL(12,2) NOT NULL,
-	data_ocorrencia DATE NOT NULL,
+	data_ocorrencia DATETIME NOT NULL,
 	descricao TEXT,
 	fonte VARCHAR(255),
 	data_criado TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

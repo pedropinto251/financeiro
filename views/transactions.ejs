@@ -29,12 +29,12 @@
       <% } %>
 
       <section class="grid two">
-        <div class="card">
+        <div class="card tx-form-card">
           <h2>Adicionar movimento</h2>
-          <form method="POST" action="/transactions" enctype="multipart/form-data" class="stack">
+          <form method="POST" action="/transactions" enctype="multipart/form-data" class="stack" id="tx-form">
             <label class="field">
               <span>Tipo</span>
-              <select name="type" required>
+              <select name="type" id="tx-type" required>
                 <option value="expense">Despesa</option>
                 <option value="income">Receita</option>
               </select>
@@ -45,19 +45,15 @@
             </label>
             <label class="field">
               <span>Data</span>
-              <input name="date" type="date" required />
+              <input name="date" id="tx-date" type="date" required />
             </label>
             <label class="field">
               <span>Descricao</span>
               <input name="description" type="text" />
             </label>
             <label class="field">
-              <span>Fonte</span>
-              <input name="source" type="text" />
-            </label>
-            <label class="field">
               <span>Categoria</span>
-              <select name="category_id">
+              <select name="category_id" id="tx-category">
                 <option value="">Sem categoria</option>
                 <% categories.forEach((cat) => { %>
                   <option value="<%= cat.id %>"><%= cat.nome %> (<%= cat.tipo === 'income' ? 'Receita' : 'Despesa' %>)</option>
@@ -81,7 +77,10 @@
               <% recent.forEach((row) => { %>
                 <li>
                   <span>
-                    <%= row.data_ocorrencia %> - <%= row.categoria_nome || 'Sem categoria' %>
+                    <span class="date" data-date="<%= row.data_ocorrencia %>"></span> - <%= row.categoria_nome || 'Sem categoria' %>
+                    <% if (row.descricao) { %>
+                      <span class="tx-desc"> · <%= row.descricao %></span>
+                    <% } %>
                     <% if (row.document_id) { %>
                       <a class="doc-link" href="/documents/<%= row.document_id %>">Documento</a>
                     <% } %>
@@ -96,5 +95,90 @@
         </div>
       </section>
     </main>
+
+    <button class="fab" type="button" id="open-tx">
+      <i class="fa-solid fa-plus"></i>
+    </button>
+
+    <div class="modal-overlay" id="tx-modal">
+      <div class="modal">
+        <div class="modal-header">
+          <h2>Novo movimento</h2>
+          <button class="modal-close" type="button" id="close-tx">Fechar</button>
+        </div>
+        <form method="POST" action="/transactions" enctype="multipart/form-data" class="stack" id="tx-form-mobile">
+          <label class="field">
+            <span>Tipo</span>
+            <select name="type" id="tx-type-mobile" required>
+              <option value="expense">Despesa</option>
+              <option value="income">Receita</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Valor</span>
+            <input name="amount" type="number" step="0.01" required />
+          </label>
+          <label class="field">
+            <span>Data</span>
+            <input name="date" id="tx-date-mobile" type="date" required />
+          </label>
+          <label class="field">
+            <span>Descricao</span>
+            <input name="description" type="text" />
+          </label>
+          <label class="field">
+            <span>Categoria</span>
+            <select name="category_id" required>
+              <option value="">Sem categoria</option>
+              <% categories.forEach((cat) => { %>
+                <option value="<%= cat.id %>"><%= cat.nome %> (<%= cat.tipo === 'income' ? 'Receita' : 'Despesa' %>)</option>
+              <% }) %>
+            </select>
+          </label>
+          <label class="field">
+            <span>Documento</span>
+            <input name="documento" type="file" />
+          </label>
+          <button type="submit">Guardar</button>
+        </form>
+      </div>
+    </div>
+
+    <script>
+      const dateInputs = [document.getElementById('tx-date'), document.getElementById('tx-date-mobile')];
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const dd = String(today.getDate()).padStart(2, '0');
+      dateInputs.forEach((input) => {
+        if (input) input.value = `${yyyy}-${mm}-${dd}`;
+      });
+
+      const dateFormatter = new Intl.DateTimeFormat('pt-PT', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      });
+      document.querySelectorAll('.date').forEach((el) => {
+        const raw = el.dataset.date;
+        const parsed = raw ? new Date(raw) : null;
+        el.textContent = parsed ? dateFormatter.format(parsed) : '';
+      });
+
+      const openBtn = document.getElementById('open-tx');
+      const modal = document.getElementById('tx-modal');
+      const closeBtn = document.getElementById('close-tx');
+      if (openBtn && modal && closeBtn) {
+        openBtn.addEventListener('click', () => modal.classList.add('open'));
+        closeBtn.addEventListener('click', () => modal.classList.remove('open'));
+        modal.addEventListener('click', (e) => {
+          if (e.target === modal) modal.classList.remove('open');
+        });
+        window.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape') modal.classList.remove('open');
+        });
+      }
+    </script>
+    <script src="/js/documents.js"></script>
   </body>
 </html>

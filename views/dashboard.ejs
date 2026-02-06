@@ -36,27 +36,41 @@
           <p class="muted">Despesas: <%= summary.expense.toFixed(2) %> €</p>
         </div>
         <div class="card">
+          <h2>Poupanca anual</h2>
+          <p class="value"><%= (yearSummary.income - yearSummary.expense).toFixed(2) %> €</p>
+          <p class="muted">Receitas: <%= yearSummary.income.toFixed(2) %> €</p>
+          <p class="muted">Despesas: <%= yearSummary.expense.toFixed(2) %> €</p>
+        </div>
+        <div class="card">
           <h2>Gasto por categoria</h2>
           <% if (byCategory.length === 0) { %>
             <p class="muted">Sem despesas este mês.</p>
           <% } else { %>
-            <ul class="list">
+            <div class="bars">
               <% byCategory.forEach((row) => { %>
-                <li><span><%= row.nome %></span><strong><%= Number(row.total).toFixed(2) %> €</strong></li>
+                <div class="bar-row">
+                  <div class="bar-label">
+                    <span><%= row.nome %></span>
+                    <strong><%= Number(row.total).toFixed(2) %> €</strong>
+                  </div>
+                  <div class="bar-track">
+                    <span class="bar-fill" style="width:<%= row.percent %>%"></span>
+                  </div>
+                </div>
               <% }) %>
-            </ul>
+            </div>
           <% } %>
         </div>
         <div class="card">
           <h2>Evolucao 6 meses</h2>
-          <ul class="list">
+          <div class="spark">
             <% series.forEach((row) => { %>
-              <li>
-                <span><%= row.mes %></span>
-                <strong><%= (row.total_income - row.total_expense).toFixed(2) %> €</strong>
-              </li>
+              <div class="spark-col">
+                <span class="spark-bar" style="height:<%= Math.min(100, Math.max(6, Math.round(Math.abs(row.total_income - row.total_expense) / 10))) %>%"></span>
+                <small><%= row.mes.slice(5,7) %>/<%= row.mes.slice(2,4) %></small>
+              </div>
             <% }) %>
-          </ul>
+          </div>
         </div>
       </section>
     </main>

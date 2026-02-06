@@ -20,7 +20,53 @@ async function createCategory({ groupId, name, type }) {
   return result.insertId;
 }
 
+async function ensureDefaultCategories(groupId) {
+  const [rows] = await pool.query(
+    'SELECT COUNT(*) AS total FROM finance_categories WHERE finance_group_id = ?',
+    [groupId]
+  );
+  if (rows[0] && rows[0].total > 0) return;
+
+  const expenseDefaults = [
+    'Casa',
+    'Supermercado',
+    'Transporte',
+    'Restauracao',
+    'Saude',
+    'Lazer',
+    'Educacao',
+    'Assinaturas',
+    'Outros',
+  ];
+  const incomeDefaults = [
+    'Salario',
+    'Freelance',
+    'Rendas',
+    'Investimentos',
+    'Outros',
+  ];
+
+  const values = [];
+  const params = [];
+  expenseDefaults.forEach((name) => {
+    values.push('(?, ?, ?)');
+    params.push(groupId, name, 'expense');
+  });
+  incomeDefaults.forEach((name) => {
+    values.push('(?, ?, ?)');
+    params.push(groupId, name, 'income');
+  });
+
+  if (values.length) {
+    await pool.query(
+      `INSERT INTO finance_categories (finance_group_id, nome, tipo) VALUES ${values.join(', ')}`,
+      params
+    );
+  }
+}
+
 module.exports = {
   listCategories,
   createCategory,
+  ensureDefaultCategories,
 };

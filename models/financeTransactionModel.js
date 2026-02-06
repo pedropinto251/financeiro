@@ -53,6 +53,18 @@ async function getExpenseByCategory(groupId, monthStart, monthEnd) {
   return rows;
 }
 
+async function getYearSummary(groupId, yearStart, yearEnd) {
+  const [rows] = await pool.query(
+    `SELECT
+        SUM(CASE WHEN tipo = 'income' THEN valor ELSE 0 END) AS total_income,
+        SUM(CASE WHEN tipo = 'expense' THEN valor ELSE 0 END) AS total_expense
+     FROM finance_transactions
+     WHERE finance_group_id = ? AND data_ocorrencia BETWEEN ? AND ?`,
+    [groupId, yearStart, yearEnd]
+  );
+  return rows[0] || { total_income: 0, total_expense: 0 };
+}
+
 async function getMonthlySeries(groupId, fromDate, toDate) {
   const [rows] = await pool.query(
     `SELECT DATE_FORMAT(data_ocorrencia, '%Y-%m-01') AS mes,
@@ -71,6 +83,7 @@ module.exports = {
   createTransaction,
   listRecentTransactions,
   getMonthlySummary,
+  getYearSummary,
   getExpenseByCategory,
   getMonthlySeries,
 };

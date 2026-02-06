@@ -7,22 +7,22 @@
     <link rel="stylesheet" href="/css/app.css" />
   </head>
   <body>
-    <main class="page">
-      <section class="card">
+    <main class="login">
+      <section class="card login-card">
         <h1>Entrar</h1>
         <p class="muted">Autenticacao obrigatoria para continuar.</p>
 
         <% if (error === 'missing') { %>
-          <p class="error">Preenche email e password.</p>
+          <p class="error-box">Preenche email e password.</p>
         <% } %>
         <% if (error === 'invalid') { %>
-          <p class="error">Credenciais invalidas.</p>
+          <p class="error-box">Credenciais invalidas.</p>
         <% } %>
         <% if (error === 'inactive') { %>
-          <p class="error">Conta desativada.</p>
+          <p class="error-box">Conta desativada.</p>
         <% } %>
 
-        <form method="POST" action="/login<%= redirect ? `?redirect=${encodeURIComponent(redirect)}` : '' %>">
+        <form method="POST" action="/login<%= redirect ? `?redirect=${encodeURIComponent(redirect)}` : '' %>" class="stack">
           <label class="field">
             <span>Email</span>
             <input name="email" type="email" value="<%= email || '' %>" required />

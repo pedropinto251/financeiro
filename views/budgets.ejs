@@ -42,7 +42,7 @@
             </label>
             <label class="field">
               <span>Mes</span>
-              <input name="month" type="month" required />
+              <input name="month" id="budget-month" type="month" required />
             </label>
             <label class="field">
               <span>Valor</span>
@@ -60,7 +60,7 @@
             <ul class="list">
               <% budgets.forEach((row) => { %>
                 <li>
-                  <span><%= row.mes %> - <%= row.categoria_nome %></span>
+                  <span><span class="month" data-date="<%= row.mes %>"></span> - <%= row.categoria_nome %></span>
                   <strong><%= Number(row.valor).toFixed(2) %> €</strong>
                 </li>
               <% }) %>
@@ -69,5 +69,25 @@
         </div>
       </section>
     </main>
+
+    <script>
+      const monthInput = document.getElementById('budget-month');
+      if (monthInput) {
+        const today = new Date();
+        const yyyy = today.getFullYear();
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        monthInput.value = `${yyyy}-${mm}`;
+      }
+
+      const monthFormatter = new Intl.DateTimeFormat('pt-PT', {
+        month: '2-digit',
+        year: 'numeric',
+      });
+      document.querySelectorAll('.month').forEach((el) => {
+        const raw = el.dataset.date;
+        const parsed = raw ? new Date(raw) : null;
+        el.textContent = parsed ? monthFormatter.format(parsed) : '';
+      });
+    </script>
   </body>
 </html>

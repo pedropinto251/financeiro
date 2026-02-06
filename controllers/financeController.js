@@ -1,11 +1,12 @@
 const path = require('path');
 const { ensureGroupForUser, linkUserToGroupByEmail } = require('../models/financeGroupModel');
-const { listCategories, createCategory } = require('../models/financeCategoryModel');
+const { listCategories, createCategory, ensureDefaultCategories } = require('../models/financeCategoryModel');
 const { listBudgets, upsertBudget } = require('../models/financeBudgetModel');
 const {
   createTransaction,
   listRecentTransactions,
   getMonthlySummary,
+  getYearSummary,
   getExpenseByCategory,
   getMonthlySeries,
 } = require('../models/financeTransactionModel');
@@ -66,13 +67,18 @@ function buildMessages(query) {
 async function renderDashboard(req, res, next) {
   try {
     const groupId = await withGroup(req);
+    await ensureDefaultCategories(groupId);
     const now = new Date();
     const start = monthStart(now);
     const end = monthEnd(now);
 
-    const [summary, byCategory] = await Promise.all([
+    const yearStartDate = new Date(now.getFullYear(), 0, 1);
+    const yearEndDate = new Date(now.getFullYear(), 11, 31);
+
+    const [summary, byCategory, yearSummary] = await Promise.all([
       getMonthlySummary(groupId, formatDate(start), formatDate(end)),
       getExpenseByCategory(groupId, formatDate(start), formatDate(end)),
+      getYearSummary(groupId, formatDate(yearStartDate), formatDate(yearEndDate)),
     ]);
 
     const seriesStart = new Date(now.getFullYear(), now.getMonth() - 5, 1);
@@ -90,6 +96,12 @@ async function renderDashboard(req, res, next) {
       });
     }
 
+    const maxCategory = byCategory.reduce((max, row) => Math.max(max, Number(row.total || 0)), 0) || 0;
+    const byCategoryWithPerc = byCategory.map(row => ({
+      ...row,
+      percent: maxCategory ? Math.round((Number(row.total || 0) / maxCategory) * 100) : 0,
+    }));
+
     res.render('dashboard', {
       title: 'Dashboard',
       user: req.user,
@@ -98,7 +110,11 @@ async function renderDashboard(req, res, next) {
         income: Number(summary.total_income || 0),
         expense: Number(summary.total_expense || 0),
       },
-      byCategory,
+      yearSummary: {
+        income: Number(yearSummary.total_income || 0),
+        expense: Number(yearSummary.total_expense || 0),
+      },
+      byCategory: byCategoryWithPerc,
       series,
       ...buildMessages(req.query),
     });
@@ -110,6 +126,7 @@ async function renderDashboard(req, res, next) {
 async function renderTransactions(req, res, next) {
   try {
     const groupId = await withGroup(req);
+    await ensureDefaultCategories(groupId);
     const [categories, recent] = await Promise.all([
       listCategories(groupId),
       listRecentTransactions(groupId, 30),
@@ -130,6 +147,7 @@ async function renderTransactions(req, res, next) {
 async function renderCategories(req, res, next) {
   try {
     const groupId = await withGroup(req);
+    await ensureDefaultCategories(groupId);
     const categories = await listCategories(groupId);
     res.render('categories', {
       title: 'Categorias',
@@ -146,6 +164,7 @@ async function renderCategories(req, res, next) {
 async function renderBudgets(req, res, next) {
   try {
     const groupId = await withGroup(req);
+    await ensureDefaultCategories(groupId);
     const [categories, budgets] = await Promise.all([
       listCategories(groupId),
       listBudgets(groupId),
