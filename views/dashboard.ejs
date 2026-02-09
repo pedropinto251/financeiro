@@ -25,12 +25,15 @@
         <div class="error-box"><%= error %></div>
       <% } %>
 
-      <section class="card" style="margin-bottom: 1rem;">
-        <div class="tx-actions">
-          <strong>Atalho:</strong>
-          <button type="button" class="icon-btn quick-add" data-type="expense">Adicionar despesa</button>
-          <button type="button" class="icon-btn quick-add" data-type="income">Adicionar receita</button>
-        </div>
+      <section class="quick-actions">
+        <button type="button" class="quick-btn quick-add quick-expense" data-type="expense">
+          <i class="fa-solid fa-arrow-trend-down"></i>
+          Despesa
+        </button>
+        <button type="button" class="quick-btn quick-add quick-income" data-type="income">
+          <i class="fa-solid fa-arrow-trend-up"></i>
+          Receita
+        </button>
       </section>
 
       <section class="grid cards">

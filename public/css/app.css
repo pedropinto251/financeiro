@@ -106,6 +106,51 @@ h2 { margin: 0 0 1rem; font-size: 1.05rem; font-weight: 600; }
   box-shadow: var(--shadow);
 }
 
+.quick-actions {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.quick-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 14px;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--border-strong);
+  background: color-mix(in srgb, var(--card) 80%, transparent);
+  color: var(--text);
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: var(--shadow-soft);
+}
+
+.quick-btn i { font-size: 0.95rem; }
+
+.quick-btn:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.quick-expense {
+  border-color: color-mix(in srgb, var(--danger) 35%, transparent);
+}
+
+.quick-income {
+  border-color: color-mix(in srgb, var(--success) 35%, transparent);
+}
+
+@media (max-width: 720px) {
+  .quick-actions {
+    width: 100%;
+  }
+  .quick-btn {
+    flex: 1 1 140px;
+    justify-content: center;
+  }
+}
+
 .grid {
   display: grid;
   gap: 1.5rem;
