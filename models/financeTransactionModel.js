@@ -14,7 +14,9 @@ async function listRecentTransactions(groupId, limit = 20) {
   const [rows] = await pool.query(
     `SELECT t.id, t.tipo, t.valor, t.data_ocorrencia, t.descricao, t.fonte,
         c.nome AS categoria_nome,
-        d.id AS document_id
+        d.id AS document_id,
+        d.original_name AS document_name,
+        d.mime_type AS document_mime
      FROM finance_transactions t
      LEFT JOIN finance_categories c ON c.id = t.categoria_id
      LEFT JOIN finance_documents d ON d.transaction_id = t.id
@@ -26,18 +28,28 @@ async function listRecentTransactions(groupId, limit = 20) {
   return rows;
 }
 
-async function listTransactions({ groupId, categoryId, limit, offset }) {
+async function listTransactions({ groupId, categoryId, fromDate, toDate, limit, offset }) {
   const params = [groupId];
   let where = 't.finance_group_id = ? AND t.status = \'active\'';
   if (categoryId) {
     where += ' AND t.categoria_id = ?';
     params.push(categoryId);
   }
+  if (fromDate) {
+    where += ' AND t.data_ocorrencia >= ?';
+    params.push(fromDate);
+  }
+  if (toDate) {
+    where += ' AND t.data_ocorrencia <= ?';
+    params.push(toDate);
+  }
   params.push(limit, offset);
   const [rows] = await pool.query(
     `SELECT t.id, t.tipo, t.valor, t.data_ocorrencia, t.descricao, t.fonte, t.categoria_id,
         c.nome AS categoria_nome,
-        d.id AS document_id
+        d.id AS document_id,
+        d.original_name AS document_name,
+        d.mime_type AS document_mime
      FROM finance_transactions t
      LEFT JOIN finance_categories c ON c.id = t.categoria_id
      LEFT JOIN finance_documents d ON d.transaction_id = t.id
@@ -49,12 +61,20 @@ async function listTransactions({ groupId, categoryId, limit, offset }) {
   return rows;
 }
 
-async function countTransactions({ groupId, categoryId }) {
+async function countTransactions({ groupId, categoryId, fromDate, toDate }) {
   const params = [groupId];
   let where = 'finance_group_id = ? AND status = \'active\'';
   if (categoryId) {
     where += ' AND categoria_id = ?';
     params.push(categoryId);
+  }
+  if (fromDate) {
+    where += ' AND data_ocorrencia >= ?';
+    params.push(fromDate);
+  }
+  if (toDate) {
+    where += ' AND data_ocorrencia <= ?';
+    params.push(toDate);
   }
   const [rows] = await pool.query(
     `SELECT COUNT(*) AS total

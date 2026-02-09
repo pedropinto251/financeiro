@@ -5,6 +5,7 @@ const session = require('express-session');
 const path = require('path');
 const authRoutes = require('./routes/authRoutes');
 const homeRoutes = require('./routes/homeRoutes');
+const apiRoutes = require('./routes/apiRoutes');
 
 const app = express();
 
@@ -17,6 +18,18 @@ app.set('views', path.join(__dirname, 'views'));
 
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
+
+// --- CORS for API (React Native / web dev) ---
+app.use('/api', (req, res, next) => {
+	const origin = req.headers.origin || '*';
+	res.setHeader('Access-Control-Allow-Origin', origin);
+	res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+	res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+	res.setHeader('Access-Control-Allow-Credentials', 'true');
+	if (req.method === 'OPTIONS') return res.sendStatus(204);
+	return next();
+});
 // Forçar HTTPS (opcional, depende da env FORCE_HTTPS)
 const forceHttps = process.env.FORCE_HTTPS === 'true';
 app.use((req, res, next) => {
@@ -93,6 +106,7 @@ app.use((req, res, next) => {
 // --- Rotas ---
 app.use('/', authRoutes);
 app.use('/', homeRoutes);
+app.use('/api', apiRoutes);
 
 // 404
 app.use((req, res) => {
