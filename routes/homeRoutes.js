@@ -10,7 +10,11 @@ const {
   renderGoals,
   renderAdminUsers,
   handleCreateCategory,
+  handleUpdateCategory,
+  handleDeleteCategory,
   handleCreateBudget,
+  handleUpdateBudget,
+  handleDeleteBudget,
   handleCreateTransaction,
   handleShare,
   handleDownloadDocument,
@@ -57,7 +61,11 @@ router.get('/goals', ensureAuth, renderGoals);
 router.get('/admin/users', ensureAuth, ensureAdmin, renderAdminUsers);
 
 router.post('/categories', ensureAuth, handleCreateCategory);
+router.post('/categories/update', ensureAuth, handleUpdateCategory);
+router.post('/categories/delete', ensureAuth, handleDeleteCategory);
 router.post('/budgets', ensureAuth, handleCreateBudget);
+router.post('/budgets/update', ensureAuth, handleUpdateBudget);
+router.post('/budgets/delete', ensureAuth, handleDeleteBudget);
 router.post('/transactions', ensureAuth, upload.single('documento'), handleCreateTransaction);
 router.post('/share', ensureAuth, handleShare);
 router.post('/wishlist', ensureAuth, wishlistUpload.single('image'), handleCreateWishlist);

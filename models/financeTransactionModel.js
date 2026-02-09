@@ -26,6 +26,45 @@ async function listRecentTransactions(groupId, limit = 20) {
   return rows;
 }
 
+async function listTransactions({ groupId, categoryId, limit, offset }) {
+  const params = [groupId];
+  let where = 't.finance_group_id = ? AND t.status = \'active\'';
+  if (categoryId) {
+    where += ' AND t.categoria_id = ?';
+    params.push(categoryId);
+  }
+  params.push(limit, offset);
+  const [rows] = await pool.query(
+    `SELECT t.id, t.tipo, t.valor, t.data_ocorrencia, t.descricao, t.fonte, t.categoria_id,
+        c.nome AS categoria_nome,
+        d.id AS document_id
+     FROM finance_transactions t
+     LEFT JOIN finance_categories c ON c.id = t.categoria_id
+     LEFT JOIN finance_documents d ON d.transaction_id = t.id
+     WHERE ${where}
+     ORDER BY t.data_ocorrencia DESC, t.id DESC
+     LIMIT ? OFFSET ?`,
+    params
+  );
+  return rows;
+}
+
+async function countTransactions({ groupId, categoryId }) {
+  const params = [groupId];
+  let where = 'finance_group_id = ? AND status = \'active\'';
+  if (categoryId) {
+    where += ' AND categoria_id = ?';
+    params.push(categoryId);
+  }
+  const [rows] = await pool.query(
+    `SELECT COUNT(*) AS total
+     FROM finance_transactions
+     WHERE ${where}`,
+    params
+  );
+  return rows[0] ? Number(rows[0].total || 0) : 0;
+}
+
 async function getMonthlySummary(groupId, monthStart, monthEnd) {
   const [rows] = await pool.query(
     `SELECT
@@ -128,6 +167,8 @@ async function deleteTransaction(groupId, id) {
 module.exports = {
   createTransaction,
   listRecentTransactions,
+  listTransactions,
+  countTransactions,
   getMonthlySummary,
   getYearSummary,
   getTotalSummary,

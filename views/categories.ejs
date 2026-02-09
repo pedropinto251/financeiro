@@ -53,7 +53,22 @@
               <% categories.forEach((cat) => { %>
                 <li>
                   <span><%= cat.nome %></span>
-                  <strong><%= cat.tipo === 'income' ? 'Receita' : 'Despesa' %></strong>
+                  <div class="tx-actions">
+                    <strong><%= cat.tipo === 'income' ? 'Receita' : 'Despesa' %></strong>
+                    <button
+                      type="button"
+                      class="icon-btn category-edit"
+                      data-id="<%= cat.id %>"
+                      data-name="<%= cat.nome %>"
+                      data-type="<%= cat.tipo %>"
+                    >
+                      Editar
+                    </button>
+                    <form method="POST" action="/categories/delete" class="inline-form">
+                      <input type="hidden" name="id" value="<%= cat.id %>" />
+                      <button type="submit" class="icon-btn danger">Apagar</button>
+                    </form>
+                  </div>
                 </li>
               <% }) %>
             </ul>
@@ -61,5 +76,64 @@
         </div>
       </section>
     </main>
+
+    <div class="modal-overlay" id="category-edit-modal">
+      <div class="modal">
+        <div class="modal-header">
+          <h2>Editar categoria</h2>
+          <button type="button" class="modal-close" data-close="category-edit-modal">Fechar</button>
+        </div>
+        <form method="POST" action="/categories/update" class="stack" id="category-edit-form">
+          <input type="hidden" name="id" id="category-edit-id" />
+          <label class="field">
+            <span>Nome</span>
+            <input name="name" id="category-edit-name" type="text" required />
+          </label>
+          <label class="field">
+            <span>Tipo</span>
+            <select name="type" id="category-edit-type">
+              <option value="expense">Despesa</option>
+              <option value="income">Receita</option>
+            </select>
+          </label>
+          <button type="submit">Guardar</button>
+        </form>
+      </div>
+    </div>
+
+    <script>
+      const catModal = document.getElementById('category-edit-modal');
+      const catId = document.getElementById('category-edit-id');
+      const catName = document.getElementById('category-edit-name');
+      const catType = document.getElementById('category-edit-type');
+
+      const openModal = (modal) => modal && modal.classList.add('open');
+      const closeModal = (modal) => modal && modal.classList.remove('open');
+
+      document.querySelectorAll('.category-edit').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          if (catId) catId.value = btn.dataset.id || '';
+          if (catName) catName.value = btn.dataset.name || '';
+          if (catType) catType.value = btn.dataset.type || 'expense';
+          openModal(catModal);
+        });
+      });
+
+      document.querySelectorAll('[data-close]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const id = btn.dataset.close;
+          closeModal(document.getElementById(id));
+        });
+      });
+
+      if (catModal) {
+        catModal.addEventListener('click', (e) => {
+          if (e.target === catModal) closeModal(catModal);
+        });
+      }
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeModal(catModal);
+      });
+    </script>
   </body>
 </html>

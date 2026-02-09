@@ -102,6 +102,17 @@ async function getTotalAllocated(groupId) {
   return rows[0] ? Number(rows[0].total || 0) : 0;
 }
 
+async function getMonthlyAllocated(groupId, monthStart, monthEnd) {
+  const [rows] = await pool.query(
+    `SELECT COALESCE(SUM(valor), 0) AS total
+     FROM finance_goal_allocations
+     WHERE finance_group_id = ?
+       AND data_alocacao BETWEEN ? AND ?`,
+    [groupId, monthStart, monthEnd]
+  );
+  return rows[0] ? Number(rows[0].total || 0) : 0;
+}
+
 async function updateGoalStatus(groupId, goalId, status) {
   await pool.query(
     `UPDATE finance_goals SET estado = ? WHERE finance_group_id = ? AND id = ?`,
@@ -136,6 +147,7 @@ module.exports = {
   deleteAllocation,
   getGoalAllocatedTotal,
   getTotalAllocated,
+  getMonthlyAllocated,
   updateGoalStatus,
   updateGoal,
   deleteGoal,

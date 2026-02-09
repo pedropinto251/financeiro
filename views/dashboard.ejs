@@ -25,12 +25,23 @@
         <div class="error-box"><%= error %></div>
       <% } %>
 
+      <section class="card" style="margin-bottom: 1rem;">
+        <div class="tx-actions">
+          <strong>Atalho:</strong>
+          <button type="button" class="icon-btn quick-add" data-type="expense">Adicionar despesa</button>
+          <button type="button" class="icon-btn quick-add" data-type="income">Adicionar receita</button>
+        </div>
+      </section>
+
       <section class="grid cards">
         <div class="card">
           <h2>Saldo mensal</h2>
-          <p class="value"><%= (summary.income - summary.expense).toFixed(2) %> €</p>
+          <p class="value"><%= (summary.income - summary.expense - summary.allocated).toFixed(2) %> €</p>
           <p class="muted">Receitas: <%= summary.income.toFixed(2) %> €</p>
           <p class="muted">Despesas: <%= summary.expense.toFixed(2) %> €</p>
+          <% if (summary.allocated > 0) { %>
+            <p class="muted">Alocado a objetivos: <%= summary.allocated.toFixed(2) %> €</p>
+          <% } %>
         </div>
         <div class="card">
           <h2>Poupanca anual</h2>
@@ -63,19 +74,23 @@
           <% if (!goals || goals.length === 0) { %>
             <p class="muted">Ainda nao existem objetivos.</p>
           <% } else { %>
-            <p class="muted">Disponivel para alocar: <%= Number(availableTotal || 0).toFixed(2) %> €</p>
+            <p class="muted">Saldo corrente: <%= Number(availableTotal || 0).toFixed(2) %> €</p>
+            <p class="muted">Poupancas alocadas: <%= Number(allocatedTotal || 0).toFixed(2) %> €</p>
             <ul class="list">
               <% goals.forEach((goal) => { %>
                 <% const target = Number(goal.valor_objetivo || 0); %>
                 <% const allocated = Number(goal.total_alocado || 0); %>
                 <% const percent = target > 0 ? Math.min(100, Math.round((allocated / target) * 100)) : 0; %>
-                <li>
+                <li class="<%= percent >= 100 ? 'goal-complete' : '' %>">
                   <div>
                     <strong><%= goal.nome %></strong>
                     <div class="tx-desc">Alocado: <%= allocated.toFixed(2) %> € / <%= target.toFixed(2) %> €</div>
                     <div class="bar-track" style="margin-top:0.35rem;">
                       <span class="bar-fill" style="width:<%= percent %>%"></span>
                     </div>
+                    <% if (percent >= 100) { %>
+                      <div class="goal-badge">Objetivo cumprido! Parabens!</div>
+                    <% } %>
                   </div>
                   <div class="tx-actions">
                     <button
@@ -95,6 +110,51 @@
         </div>
       </section>
     </main>
+
+    <div class="modal-overlay" id="quick-tx-modal">
+      <div class="modal">
+        <div class="modal-header">
+          <h2>Novo movimento</h2>
+          <button class="modal-close" type="button" id="quick-close">Fechar</button>
+        </div>
+        <form method="POST" action="/transactions" enctype="multipart/form-data" class="stack" id="quick-tx-form">
+          <label class="field">
+            <span>Tipo</span>
+            <select name="type" id="quick-tx-type" required>
+              <option value="expense">Despesa</option>
+              <option value="income">Receita</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Valor</span>
+            <input name="amount" type="number" step="0.01" required />
+          </label>
+          <label class="field">
+            <span>Data</span>
+            <input name="date" id="quick-tx-date" type="date" required />
+          </label>
+          <label class="field">
+            <span>Descricao</span>
+            <input name="description" type="text" />
+          </label>
+          <label class="field">
+            <span>Categoria</span>
+            <input type="text" id="quick-category-filter" placeholder="Pesquisar categoria..." />
+            <select name="category_id" id="quick-category">
+              <option value="">Sem categoria</option>
+              <% categories.forEach((cat) => { %>
+                <option value="<%= cat.id %>"><%= cat.nome %> (<%= cat.tipo === 'income' ? 'Receita' : 'Despesa' %>)</option>
+              <% }) %>
+            </select>
+          </label>
+          <label class="field">
+            <span>Documento</span>
+            <input name="documento" type="file" />
+          </label>
+          <button type="submit">Guardar</button>
+        </form>
+      </div>
+    </div>
 
     <div class="modal-overlay" id="allocation-modal">
       <div class="modal">
@@ -174,8 +234,58 @@
           if (e.target === allocationModal) closeModal(allocationModal);
         });
       }
+      const quickModal = document.getElementById('quick-tx-modal');
+      const quickClose = document.getElementById('quick-close');
+      const quickType = document.getElementById('quick-tx-type');
+      const quickDate = document.getElementById('quick-tx-date');
+      if (quickDate) {
+        quickDate.value = `${yyyy}-${mm}-${dd}`;
+      }
+
+      document.querySelectorAll('.quick-add').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const type = btn.dataset.type || 'expense';
+          if (quickType) quickType.value = type;
+          if (quickModal) quickModal.classList.add('open');
+        });
+      });
+
+      if (quickClose && quickModal) {
+        quickClose.addEventListener('click', () => quickModal.classList.remove('open'));
+        quickModal.addEventListener('click', (e) => {
+          if (e.target === quickModal) quickModal.classList.remove('open');
+        });
+      }
+
+      const wireCategoryFilter = (inputId, selectId) => {
+        const input = document.getElementById(inputId);
+        const select = document.getElementById(selectId);
+        if (!input || !select) return;
+        const options = Array.from(select.options).map(opt => ({
+          value: opt.value,
+          text: opt.textContent,
+        }));
+        input.addEventListener('input', () => {
+          const q = input.value.trim().toLowerCase();
+          select.innerHTML = '';
+          options.forEach((opt) => {
+            if (!q || opt.text.toLowerCase().includes(q)) {
+              const optionEl = document.createElement('option');
+              optionEl.value = opt.value;
+              optionEl.textContent = opt.text;
+              select.appendChild(optionEl);
+            }
+          });
+        });
+      };
+
+      wireCategoryFilter('quick-category-filter', 'quick-category');
+
       window.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') closeModal(allocationModal);
+        if (e.key === 'Escape') {
+          closeModal(allocationModal);
+          if (quickModal) quickModal.classList.remove('open');
+        }
       });
     </script>
   </body>

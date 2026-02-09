@@ -20,6 +20,22 @@ async function createCategory({ groupId, name, type }) {
   return result.insertId;
 }
 
+async function updateCategory({ groupId, id, name, type }) {
+  await pool.query(
+    `UPDATE finance_categories
+     SET nome = ?, tipo = ?
+     WHERE finance_group_id = ? AND id = ?`,
+    [name, type, groupId, id]
+  );
+}
+
+async function deleteCategory(groupId, id) {
+  await pool.query(
+    `DELETE FROM finance_categories WHERE finance_group_id = ? AND id = ?`,
+    [groupId, id]
+  );
+}
+
 async function ensureDefaultCategories(groupId) {
   const [rows] = await pool.query(
     'SELECT COUNT(*) AS total FROM finance_categories WHERE finance_group_id = ?',
@@ -68,5 +84,7 @@ async function ensureDefaultCategories(groupId) {
 module.exports = {
   listCategories,
   createCategory,
+  updateCategory,
+  deleteCategory,
   ensureDefaultCategories,
 };

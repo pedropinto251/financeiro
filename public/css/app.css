@@ -392,6 +392,18 @@ button.secondary {
   .value { font-size: 1.5rem; }
   .tx-form-card { display: none; }
   .mobile-add { display: flex; }
+  .two { grid-template-columns: 1fr; }
+  .mobile-add {
+    width: auto;
+    margin-left: auto;
+    margin-right: 0.4rem;
+    padding: 0;
+    width: 46px;
+    height: 46px;
+    border-radius: 999px;
+    font-size: 1rem;
+  }
+  .mobile-add i { font-size: 1rem; }
 }
 
 @media (min-width: 1024px) {
@@ -472,6 +484,42 @@ button.secondary {
   flex-wrap: wrap;
 }
 
+.pagination {
+  margin-top: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.icon-btn.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.tx-filters .filter-clear {
+  align-self: end;
+  justify-self: start;
+}
+
+@media (max-width: 720px) {
+  .tx-filters {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+  }
+  .tx-filters > .field:first-child {
+    grid-column: 1 / -1;
+  }
+  .tx-filters .filter-date {
+    width: 100%;
+  }
+  .tx-filters .filter-clear {
+    grid-column: 1 / -1;
+    justify-self: start;
+    margin-top: 0.2rem;
+  }
+}
+
 .icon-btn {
   background: rgba(15,23,42,0.8);
   border: 1px solid rgba(148,163,184,0.2);
@@ -489,6 +537,39 @@ button.secondary {
 .icon-btn.danger {
   border-color: rgba(248,113,113,0.4);
   color: #fca5a5;
+}
+
+.goal-complete {
+  border: 1px solid rgba(34,197,94,0.28);
+  background: linear-gradient(135deg, rgba(34,197,94,0.2), rgba(59,130,246,0.08));
+  border-radius: 14px;
+  padding: 0.7rem;
+  box-shadow: inset 0 0 0 1px rgba(34,197,94,0.08), 0 8px 22px rgba(34,197,94,0.12);
+  position: relative;
+}
+
+.goal-badge {
+  display: inline-block;
+  margin-top: 0.5rem;
+  padding: 0.3rem 0.8rem;
+  border-radius: 999px;
+  background: rgba(34,197,94,0.3);
+  color: #dcfce7;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+@media (min-width: 900px) {
+  .goal-complete {
+    padding: 0.9rem 1rem;
+    border-left: 4px solid rgba(34,197,94,0.7);
+    background: linear-gradient(135deg, rgba(34,197,94,0.22), rgba(14,116,144,0.08));
+  }
+  .goal-badge {
+    background: rgba(34,197,94,0.35);
+    font-size: 0.9rem;
+  }
 }
 
 .inline-form {

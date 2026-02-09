@@ -1,10 +1,18 @@
 const path = require('path');
 const { ensureGroupForUser, linkUserToGroupByEmail } = require('../models/financeGroupModel');
-const { listCategories, createCategory, ensureDefaultCategories } = require('../models/financeCategoryModel');
-const { listBudgets, upsertBudget } = require('../models/financeBudgetModel');
+const {
+  listCategories,
+  createCategory,
+  updateCategory,
+  deleteCategory,
+  ensureDefaultCategories,
+} = require('../models/financeCategoryModel');
+const { listBudgets, upsertBudget, updateBudget, deleteBudget } = require('../models/financeBudgetModel');
 const {
   createTransaction,
   listRecentTransactions,
+  listTransactions,
+  countTransactions,
   getMonthlySummary,
   getYearSummary,
   getTotalSummary,
@@ -24,6 +32,7 @@ const {
   deleteAllocation,
   getGoalAllocatedTotal,
   getTotalAllocated,
+  getMonthlyAllocated,
   updateGoalStatus,
   updateGoal,
   deleteGoal,
@@ -129,6 +138,8 @@ function buildMessages(query) {
     'missing-user': 'Preenche nome, email e password.',
     'user-exists': 'Este email ja esta registado.',
     'missing-user-edit': 'Preenche nome e email.',
+    'missing-category-edit': 'Preenche nome e tipo da categoria.',
+    'missing-budget-edit': 'Preenche todos os campos do budget.',
   };
   return {
     notice: query.notice ? (noticeMap[query.notice] || query.notice) : null,
@@ -147,13 +158,15 @@ async function renderDashboard(req, res, next) {
     const yearStartDate = new Date(now.getFullYear(), 0, 1);
     const yearEndDate = new Date(now.getFullYear(), 11, 31);
 
-    const [summary, byCategory, yearSummary, goals, totalSummary, totalAllocated] = await Promise.all([
+    const [summary, byCategory, yearSummary, goals, totalSummary, totalAllocated, monthlyAllocated, categories] = await Promise.all([
       getMonthlySummary(groupId, formatDate(start), formatDate(end)),
       getExpenseByCategory(groupId, formatDate(start), formatDate(end)),
       getYearSummary(groupId, formatDate(yearStartDate), formatDate(yearEndDate)),
       listGoals(groupId),
       getTotalSummary(groupId),
       getTotalAllocated(groupId),
+      getMonthlyAllocated(groupId, formatDate(start), formatDate(end)),
+      listCategories(groupId),
     ]);
 
     const incomeTotal = Number(totalSummary.total_income || 0);
@@ -175,14 +188,18 @@ async function renderDashboard(req, res, next) {
       summary: {
         income: Number(summary.total_income || 0),
         expense: Number(summary.total_expense || 0),
+        allocated: Number(monthlyAllocated || 0),
       },
       yearSummary: {
         income: Number(yearSummary.total_income || 0),
         expense: Number(yearSummary.total_expense || 0),
       },
       byCategory: byCategoryWithPerc,
+      categories,
       goals,
       availableTotal,
+      allocatedTotal,
+      balanceTotal,
       ...buildMessages(req.query),
     });
   } catch (err) {
@@ -194,16 +211,26 @@ async function renderTransactions(req, res, next) {
   try {
     const groupId = await withGroup(req);
     await ensureDefaultCategories(groupId);
-    const [categories, recent] = await Promise.all([
+    const page = Math.max(1, Number(req.query.page || 1));
+    const perPage = 20;
+    const categoryId = req.query.category_id ? Number(req.query.category_id) : null;
+    const offset = (page - 1) * perPage;
+
+    const [categories, recent, total] = await Promise.all([
       listCategories(groupId),
-      listRecentTransactions(groupId, 30),
+      listTransactions({ groupId, categoryId, limit: perPage, offset }),
+      countTransactions({ groupId, categoryId }),
     ]);
+    const totalPages = Math.max(1, Math.ceil(total / perPage));
     res.render('transactions', {
       title: 'Movimentos',
       user: req.user,
       active: 'transactions',
       categories,
       recent,
+      page,
+      totalPages,
+      categoryId,
       ...buildMessages(req.query),
     });
   } catch (err) {
@@ -360,6 +387,36 @@ async function handleCreateCategory(req, res, next) {
   }
 }
 
+async function handleUpdateCategory(req, res, next) {
+  try {
+    const groupId = await withGroup(req);
+    const { id, name, type } = req.body;
+    if (!id || !name || !type) return res.redirect('/categories?error=missing-category-edit');
+    const safeType = type === 'income' ? 'income' : 'expense';
+    await updateCategory({
+      groupId,
+      id: Number(id),
+      name: name.trim(),
+      type: safeType,
+    });
+    return res.redirect('/categories?notice=updated');
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function handleDeleteCategory(req, res, next) {
+  try {
+    const groupId = await withGroup(req);
+    const { id } = req.body;
+    if (!id) return res.redirect('/categories');
+    await deleteCategory(groupId, Number(id));
+    return res.redirect('/categories?notice=deleted');
+  } catch (err) {
+    return next(err);
+  }
+}
+
 async function handleCreateBudget(req, res, next) {
   try {
     const groupId = await withGroup(req);
@@ -380,6 +437,38 @@ async function handleCreateBudget(req, res, next) {
   }
 }
 
+async function handleUpdateBudget(req, res, next) {
+  try {
+    const groupId = await withGroup(req);
+    const { id, category_id, month, amount } = req.body;
+    const normalizedMonth = normalizeMonthInput(month);
+    if (!id || !category_id || !normalizedMonth || !amount) {
+      return res.redirect('/budgets?error=missing-budget-edit');
+    }
+    await updateBudget({
+      groupId,
+      id: Number(id),
+      categoryId: Number(category_id),
+      month: normalizedMonth,
+      amount: Number(amount),
+    });
+    return res.redirect('/budgets?notice=updated');
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function handleDeleteBudget(req, res, next) {
+  try {
+    const groupId = await withGroup(req);
+    const { id } = req.body;
+    if (!id) return res.redirect('/budgets');
+    await deleteBudget(groupId, Number(id));
+    return res.redirect('/budgets?notice=deleted');
+  } catch (err) {
+    return next(err);
+  }
+}
 async function handleCreateTransaction(req, res, next) {
   try {
     const groupId = await withGroup(req);
@@ -893,7 +982,11 @@ module.exports = {
   renderGoals,
   renderAdminUsers,
   handleCreateCategory,
+  handleUpdateCategory,
+  handleDeleteCategory,
   handleCreateBudget,
+  handleUpdateBudget,
+  handleDeleteBudget,
   handleCreateTransaction,
   handleShare,
   handleDownloadDocument,

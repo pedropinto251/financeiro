@@ -27,15 +27,15 @@
 
       <section class="grid cards">
         <div class="card">
-          <h2>Saldo atual</h2>
-          <p class="value"><%= summary.balance.toFixed(2) %> €</p>
+          <h2>Saldo corrente</h2>
+          <p class="value"><%= summary.available.toFixed(2) %> €</p>
           <p class="muted">Receitas: <%= summary.income.toFixed(2) %> €</p>
           <p class="muted">Despesas: <%= summary.expense.toFixed(2) %> €</p>
         </div>
         <div class="card">
-          <h2>Poupanca alocada</h2>
+          <h2>Poupanca</h2>
           <p class="value"><%= summary.allocated.toFixed(2) %> €</p>
-          <p class="muted">Disponivel: <%= summary.available.toFixed(2) %> €</p>
+          <p class="muted">Saldo total: <%= summary.balance.toFixed(2) %> €</p>
         </div>
       </section>
 

@@ -50,6 +50,7 @@
             </label>
             <label class="field">
               <span>Categoria</span>
+              <input type="text" id="tx-category-filter" placeholder="Pesquisar categoria..." />
               <select name="category_id" id="tx-category">
                 <option value="">Sem categoria</option>
                 <% categories.forEach((cat) => { %>
@@ -66,7 +67,27 @@
         </div>
 
         <div class="card">
-          <h2>Movimentos recentes</h2>
+          <h2>Movimentos</h2>
+          <div class="grid two tx-filters" style="margin-bottom: 0.5rem;">
+            <label class="field">
+              <span>Categoria</span>
+              <select id="filter-category">
+                <option value="">Todas</option>
+                <% categories.forEach((cat) => { %>
+                  <option value="<%= cat.id %>"><%= cat.nome %> (<%= cat.tipo === 'income' ? 'Receita' : 'Despesa' %>)</option>
+                <% }) %>
+              </select>
+            </label>
+            <label class="field filter-date">
+              <span>De</span>
+              <input id="filter-from" type="date" />
+            </label>
+            <label class="field filter-date">
+              <span>Ate</span>
+              <input id="filter-to" type="date" />
+            </label>
+            <button type="button" class="secondary filter-clear" id="filter-clear">Limpar filtros</button>
+          </div>
           <% if (recent.length === 0) { %>
             <p class="muted">Sem movimentos ainda.</p>
           <% } else { %>
@@ -99,14 +120,19 @@
                 </li>
               <% }) %>
             </ul>
+            <div class="pagination" id="tx-pagination">
+              <% const base = categoryId ? `&category_id=${categoryId}` : ''; %>
+              <a class="icon-btn <%= page <= 1 ? 'disabled' : '' %>" href="/transactions?page=<%= Math.max(1, page - 1) %><%= base %>">Anterior</a>
+              <span class="tx-desc">Pagina <%= page %> de <%= totalPages %></span>
+              <a class="icon-btn <%= page >= totalPages ? 'disabled' : '' %>" href="/transactions?page=<%= Math.min(totalPages, page + 1) %><%= base %>">Seguinte</a>
+            </div>
           <% } %>
         </div>
       </section>
     </main>
 
-    <button class="mobile-add" type="button" id="open-tx">
+    <button class="mobile-add" type="button" id="open-tx" aria-label="Adicionar movimento">
       <i class="fa-solid fa-plus"></i>
-      Adicionar movimento
     </button>
 
     <div class="modal-overlay" id="tx-modal">
@@ -137,7 +163,8 @@
           </label>
           <label class="field">
             <span>Categoria</span>
-            <select name="category_id" required>
+            <input type="text" id="tx-category-filter-mobile" placeholder="Pesquisar categoria..." />
+            <select name="category_id" id="tx-category-mobile" required>
               <option value="">Sem categoria</option>
               <% categories.forEach((cat) => { %>
                 <option value="<%= cat.id %>"><%= cat.nome %> (<%= cat.tipo === 'income' ? 'Receita' : 'Despesa' %>)</option>
@@ -182,6 +209,7 @@
           </label>
           <label class="field">
             <span>Categoria</span>
+            <input type="text" id="edit-category-filter" placeholder="Pesquisar categoria..." />
             <select name="category_id" id="edit-category">
               <option value="">Sem categoria</option>
               <% categories.forEach((cat) => { %>
@@ -214,6 +242,56 @@
         const parsed = raw ? new Date(raw) : null;
         el.textContent = parsed ? dateFormatter.format(parsed) : '';
       });
+
+      const params = new URLSearchParams(window.location.search);
+      const quick = params.get('quick');
+      if (quick === 'expense' || quick === 'income') {
+        const desktopType = document.getElementById('tx-type');
+        const mobileType = document.getElementById('tx-type-mobile');
+        if (desktopType) desktopType.value = quick;
+        if (mobileType) mobileType.value = quick;
+        const isMobile = window.matchMedia && window.matchMedia('(max-width: 720px)').matches;
+        if (isMobile && modal) modal.classList.add('open');
+        const form = document.getElementById('tx-form');
+        if (!isMobile && form) form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+
+      const filterCategory = document.getElementById('filter-category');
+      const filterFrom = document.getElementById('filter-from');
+      const filterTo = document.getElementById('filter-to');
+      const filterClear = document.getElementById('filter-clear');
+      const pagination = document.getElementById('tx-pagination');
+
+      const applyFilters = () => {
+        const cat = filterCategory ? filterCategory.value : '';
+        const from = filterFrom && filterFrom.value ? new Date(filterFrom.value) : null;
+        const to = filterTo && filterTo.value ? new Date(filterTo.value) : null;
+        if (to) to.setHours(23, 59, 59, 999);
+        let visible = 0;
+        document.querySelectorAll('#tx-list li').forEach((li) => {
+          const liCat = li.dataset.category || '';
+          const rawDate = li.dataset.date ? new Date(li.dataset.date) : null;
+          const okCat = !cat || String(liCat) === String(cat);
+          const okFrom = !from || (rawDate && rawDate >= from);
+          const okTo = !to || (rawDate && rawDate <= to);
+          const show = okCat && okFrom && okTo;
+          li.style.display = show ? '' : 'none';
+          if (show) visible += 1;
+        });
+        if (pagination) pagination.style.display = cat || from || to ? 'none' : '';
+      };
+
+      if (filterCategory) filterCategory.addEventListener('change', applyFilters);
+      if (filterFrom) filterFrom.addEventListener('change', applyFilters);
+      if (filterTo) filterTo.addEventListener('change', applyFilters);
+      if (filterClear) {
+        filterClear.addEventListener('click', () => {
+          if (filterCategory) filterCategory.value = '';
+          if (filterFrom) filterFrom.value = '';
+          if (filterTo) filterTo.value = '';
+          applyFilters();
+        });
+      }
 
       const openBtn = document.getElementById('open-tx');
       const modal = document.getElementById('tx-modal');
@@ -250,6 +328,32 @@
           if (e.target === editModal) editModal.classList.remove('open');
         });
       }
+
+      const wireCategoryFilter = (inputId, selectId) => {
+        const input = document.getElementById(inputId);
+        const select = document.getElementById(selectId);
+        if (!input || !select) return;
+        const options = Array.from(select.options).map(opt => ({
+          value: opt.value,
+          text: opt.textContent,
+        }));
+        input.addEventListener('input', () => {
+          const q = input.value.trim().toLowerCase();
+          select.innerHTML = '';
+          options.forEach((opt) => {
+            if (!q || opt.text.toLowerCase().includes(q)) {
+              const optionEl = document.createElement('option');
+              optionEl.value = opt.value;
+              optionEl.textContent = opt.text;
+              select.appendChild(optionEl);
+            }
+          });
+        });
+      };
+
+      wireCategoryFilter('tx-category-filter', 'tx-category');
+      wireCategoryFilter('tx-category-filter-mobile', 'tx-category-mobile');
+      wireCategoryFilter('edit-category-filter', 'edit-category');
     </script>
     <script src="/js/documents.js"></script>
   </body>
