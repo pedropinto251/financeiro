@@ -93,6 +93,136 @@ function normalizeMonthInput(value) {
   return null;
 }
 
+const IMOVIRTUAL_BUILD_ID = 'DgbmbX0jiylTfZDI15F3j';
+const IMOVIRTUAL_BASE =
+  'https://www.imovirtual.com/_next/data';
+const SUPERCASA_BASE = 'https://supercasa.pt/comprar-casas';
+
+const ROOM_MAP = {
+  ONE: 1,
+  TWO: 2,
+  THREE: 3,
+  FOUR: 4,
+  FIVE: 5,
+  SIX: 6,
+  SEVEN: 7,
+  EIGHT: 8,
+};
+
+function getExtraHeadersFromEnv() {
+  const raw = process.env.SUPERCASA_HEADERS_JSON;
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') {
+      return parsed;
+    }
+  } catch {
+    // ignore
+  }
+  return {};
+}
+
+function decodeHtml(input) {
+  if (!input) return '';
+  return String(input).replace(/&(#x?[0-9a-fA-F]+|[a-zA-Z]+);/g, (match, code) => {
+    if (code.startsWith('#x')) {
+      const num = parseInt(code.slice(2), 16);
+      return Number.isFinite(num) ? String.fromCharCode(num) : match;
+    }
+    if (code.startsWith('#')) {
+      const num = parseInt(code.slice(1), 10);
+      return Number.isFinite(num) ? String.fromCharCode(num) : match;
+    }
+    const map = {
+      amp: '&',
+      lt: '<',
+      gt: '>',
+      quot: '"',
+      apos: "'",
+      nbsp: ' ',
+    };
+    return map[code] || match;
+  });
+}
+
+function cleanText(input) {
+  return decodeHtml(input).replace(/\s+/g, ' ').trim();
+}
+
+function parseImovirtual(payload) {
+  const items = (payload && payload.pageProps && payload.pageProps.data && payload.pageProps.data.searchAds && payload.pageProps.data.searchAds.items) || [];
+  return items.map((item) => {
+    const slug = typeof item.slug === 'string' ? item.slug : '';
+    const url = slug
+      ? `https://www.imovirtual.com/pt/anuncio/${slug}`
+      : null;
+    const priceValue = item && item.totalPrice && item.totalPrice.value;
+    const priceCurrency = item && item.totalPrice && item.totalPrice.currency;
+    const price = priceValue ? `${priceValue} ${priceCurrency || 'EUR'}` : 'Preco sob consulta';
+    const area = item && item.areaInSquareMeters ? `${item.areaInSquareMeters} m²` : null;
+    const roomsNumber = item && item.roomsNumber;
+    const rooms = roomsNumber ? `${ROOM_MAP[roomsNumber] || roomsNumber} quartos` : null;
+    const image = item && item.images && item.images[0] ? (item.images[0].medium || item.images[0].large) : null;
+
+    return {
+      id: String(item.id),
+      source: 'imovirtual',
+      title: item.title || 'Imovel',
+      price,
+      area,
+      rooms,
+      image,
+      url,
+    };
+  });
+}
+
+function parseSupercasa(html) {
+  const matches = [...String(html).matchAll(/id=\"property_(\d+)\"/g)];
+  if (!matches.length) return [];
+  const blocks = matches.map((match, idx) => {
+    const start = match.index || 0;
+    const end = idx + 1 < matches.length ? (matches[idx + 1].index || html.length) : html.length;
+    return html.slice(start, end);
+  });
+
+  return blocks.map((block) => {
+    const idMatch = block.match(/id=\"property_(\d+)\"/);
+    const id = idMatch ? idMatch[1] : '0';
+
+    const titleMatch = block.match(/<h2 class=\"property-list-title\">[\s\S]*?<a[^>]*>([\s\S]*?)<\/a>/);
+    const title = titleMatch ? cleanText(titleMatch[1]) : 'Imovel';
+
+    const urlMatch = block.match(/<h2 class=\"property-list-title\">[\s\S]*?<a href=\"([^\"]+)\"/);
+    const url = urlMatch ? `https://supercasa.pt${urlMatch[1]}` : null;
+
+    const priceMatch = block.match(/<div class=\"property-price\">[\s\S]*?<span>([\s\S]*?)<\/span>/);
+    const price = priceMatch ? cleanText(priceMatch[1]) : null;
+
+    const imgMatch = block.match(/background-image:\s*url\(([^)]+)\)/);
+    const image = imgMatch ? imgMatch[1].replace(/['"]/g, '') : null;
+
+    const featuresMatch = block.match(/<div class=\"property-features\">([\s\S]*?)<\/div>/);
+    const featureText = featuresMatch
+      ? [...featuresMatch[1].matchAll(/<span>([\s\S]*?)<\/span>/g)].map((m) => cleanText(m[1]))
+      : [];
+    const rooms = featureText.find((text) => text.toLowerCase().includes('quarto')) || null;
+    const area = featureText.find((text) => text.toLowerCase().includes('m²')) || null;
+
+    return {
+      id,
+      source: 'supercasa',
+      title,
+      price,
+      area,
+      rooms,
+      image,
+      url,
+    };
+  });
+}
+
 async function withGroup(req) {
   const groupId = await ensureGroupForUser(req.user);
   if (!req.session.simUser.finance_group_id) {
@@ -356,6 +486,189 @@ async function renderGoals(req, res, next) {
     });
   } catch (err) {
     return next(err);
+  }
+}
+
+async function renderRealEstate(req, res, next) {
+  try {
+    res.render('realestate', {
+      title: 'Imoveis',
+      user: req.user,
+      active: 'realestate',
+      ...buildMessages(req.query),
+    });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function handleRealEstateData(req, res) {
+  try {
+    const districtRaw = (req.query.district || 'aveiro').toString();
+    const councilRaw = (req.query.council || 'espinho').toString();
+    const pageRaw = Number(req.query.page || 1);
+    const page = Number.isFinite(pageRaw) && pageRaw > 0 ? Math.floor(pageRaw) : 1;
+
+    const normalizeSlug = (value) =>
+      value
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+
+    const district = normalizeSlug(districtRaw) || 'aveiro';
+    const council = normalizeSlug(councilRaw) || 'espinho';
+
+    const imovirtualUrl = `${IMOVIRTUAL_BASE}/${IMOVIRTUAL_BUILD_ID}/pt/resultados/comprar/apartamento/${district}/${council}.json?limit=36&ownerTypeSingleSelect=ALL&by=DEFAULT&direction=DESC&searchingCriteria=comprar&searchingCriteria=apartamento&searchingCriteria=${encodeURIComponent(
+      district
+    )}&searchingCriteria=${encodeURIComponent(council)}&page=${page}`;
+
+    const supercasaUrl = `${SUPERCASA_BASE}/${district}/${council}/pagina-${page}`;
+
+    const headersCommon = {
+      'accept-language': 'pt-PT,pt;q=0.9,en;q=0.8',
+      'user-agent':
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+    };
+    const getPlaywright = () => {
+      try {
+        // Lazy optional dependency
+        return require('playwright');
+      } catch {
+        return null;
+      }
+    };
+    const fetchSupercasaWithPlaywright = async (targetUrl) => {
+      const playwright = getPlaywright();
+      if (!playwright) {
+        return { ok: false, error: 'playwright_missing', html: '' };
+      }
+      const browser = await playwright.chromium.launch({ headless: true });
+      try {
+        const context = await browser.newContext({
+          userAgent: headersCommon['user-agent'],
+          locale: 'pt-PT',
+          viewport: { width: 1280, height: 720 },
+        });
+        const page = await context.newPage();
+        await page.setExtraHTTPHeaders({
+          'accept-language': headersCommon['accept-language'],
+        });
+
+        const maxAttempts = 2;
+        for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+          await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 45000 });
+          await page.waitForTimeout(1500);
+          await page.waitForLoadState('networkidle', { timeout: 45000 }).catch(() => {});
+
+          const title = await page.title();
+          if (!/just a moment/i.test(title)) {
+            const hasList = await page.$('.list-properties');
+            if (hasList) {
+              const html = await page.content();
+              await context.close();
+              return { ok: true, html };
+            }
+          }
+
+          // still blocked or list not ready: wait a bit and retry once
+          await page.waitForTimeout(4000);
+        }
+
+        const html = await page.content();
+        await context.close();
+        return { ok: !/Just a moment/i.test(html), html, error: 'playwright_blocked' };
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : 'playwright_failed', html: '' };
+      } finally {
+        await browser.close();
+      }
+    };
+    const extraSupercasaHeaders = getExtraHeadersFromEnv();
+    const [imovirtualRes, supercasaRes] = await Promise.all([
+      fetch(imovirtualUrl, {
+        headers: { accept: 'application/json', ...headersCommon },
+      }),
+      fetch(supercasaUrl, {
+        headers: {
+          accept: '*/*',
+          'cache-control': 'no-cache',
+          ...headersCommon,
+          referer: 'https://supercasa.pt/',
+          ...extraSupercasaHeaders,
+        },
+      }),
+    ]);
+
+    let imovirtual = [];
+    let supercasa = [];
+    const warnings = [];
+
+    const safeReadText = async (response, limit) => {
+      try {
+        const text = await response.text();
+        if (!text) return '';
+        return text.slice(0, limit);
+      } catch {
+        return '';
+      }
+    };
+
+    if (imovirtualRes.ok) {
+      const imovirtualJson = await imovirtualRes.json();
+      imovirtual = parseImovirtual(imovirtualJson);
+    } else {
+      const bodySnippet = await safeReadText(imovirtualRes, 300);
+      warnings.push({
+        source: 'imovirtual',
+        error: 'imovirtual_unavailable',
+        status: imovirtualRes.status,
+        statusText: imovirtualRes.statusText,
+        bodySnippet,
+      });
+    }
+
+    if (supercasaRes.ok) {
+      const supercasaHtml = await supercasaRes.text();
+      if (/Just a moment/i.test(supercasaHtml)) {
+        const pw = await fetchSupercasaWithPlaywright();
+        if (pw.ok) {
+          supercasa = parseSupercasa(pw.html);
+        } else {
+          warnings.push({
+            source: 'supercasa',
+            error: pw.error || 'supercasa_cloudflare',
+          });
+        }
+      } else {
+        supercasa = parseSupercasa(supercasaHtml);
+      }
+    } else {
+      const bodySnippet = await safeReadText(supercasaRes, 300);
+      const pw = await fetchSupercasaWithPlaywright(supercasaUrl);
+      if (pw.ok) {
+        supercasa = parseSupercasa(pw.html);
+      } else {
+        warnings.push({
+          source: 'supercasa',
+          error: 'supercasa_unavailable',
+          status: supercasaRes.status,
+          statusText: supercasaRes.statusText,
+          bodySnippet,
+          playwrightError: pw.error || undefined,
+        });
+      }
+    }
+
+    return res.json({ imovirtual, supercasa, warnings, page, district, council });
+  } catch (err) {
+    console.error('realestate:data failed', err);
+    return res.status(500).json({
+      error: 'server',
+      message: err instanceof Error ? err.message : 'unknown',
+      cause: err && typeof err === 'object' && err.cause ? String(err.cause) : undefined,
+    });
   }
 }
 
@@ -980,6 +1293,7 @@ module.exports = {
   renderShare,
   renderWishlist,
   renderGoals,
+  renderRealEstate,
   renderAdminUsers,
   handleCreateCategory,
   handleUpdateCategory,
@@ -1010,4 +1324,5 @@ module.exports = {
   handleDeleteAllocation,
   handleCreateUser,
   handleUpdateUser,
+  handleRealEstateData,
 };

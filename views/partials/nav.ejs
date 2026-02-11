@@ -27,6 +27,10 @@
     <i class="fa-solid fa-list-check"></i>
     <span>Planeamento</span>
   </a>
+  <a href="/realestate" class="nav-link <%= active === 'realestate' ? 'active' : '' %>">
+    <i class="fa-solid fa-building"></i>
+    <span>Imoveis</span>
+  </a>
   <% if (user && user.role === 'admin') { %>
     <a href="/admin/users" class="nav-link <%= active === 'admin-users' ? 'active' : '' %>">
       <i class="fa-solid fa-user-shield"></i>
@@ -91,6 +95,10 @@
     <a href="/goals" class="menu-item">
       <i class="fa-solid fa-piggy-bank"></i>
       Objetivos
+    </a>
+    <a href="/realestate" class="menu-item">
+      <i class="fa-solid fa-building"></i>
+      Imoveis
     </a>
     <% if (user && user.role === 'admin') { %>
       <a href="/admin/users" class="menu-item">

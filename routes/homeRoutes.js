@@ -8,6 +8,7 @@ const {
   renderShare,
   renderWishlist,
   renderGoals,
+  renderRealEstate,
   renderAdminUsers,
   handleCreateCategory,
   handleUpdateCategory,
@@ -38,6 +39,7 @@ const {
   handleDeleteAllocation,
   handleCreateUser,
   handleUpdateUser,
+  handleRealEstateData,
 } = require('../controllers/financeController');
 const upload = require('../config/upload');
 const wishlistUpload = require('../config/wishlistUpload');
@@ -58,6 +60,8 @@ router.get('/budgets', ensureAuth, renderBudgets);
 router.get('/share', ensureAuth, renderShare);
 router.get('/wishlist', ensureAuth, renderWishlist);
 router.get('/goals', ensureAuth, renderGoals);
+router.get('/realestate', ensureAuth, renderRealEstate);
+router.get('/realestate/data', ensureAuth, handleRealEstateData);
 router.get('/admin/users', ensureAuth, ensureAdmin, renderAdminUsers);
 
 router.post('/categories', ensureAuth, handleCreateCategory);
