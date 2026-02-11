@@ -531,12 +531,50 @@ async function handleRealEstateData(req, res) {
       'user-agent':
         'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
     };
+    const safeReadText = async (response, limit) => {
+      try {
+        const text = await response.text();
+        if (!text) return '';
+        return text.slice(0, limit);
+      } catch {
+        return '';
+      }
+    };
     const getPlaywright = () => {
       try {
         // Lazy optional dependency
         return require('playwright');
       } catch {
         return null;
+      }
+    };
+    const fetchSupercasaWithBrowserless = async (targetUrl) => {
+      const token = process.env.BROWSERLESS_TOKEN;
+      if (!token) return { ok: false, error: 'browserless_token_missing', html: '' };
+      try {
+        const endpoint = `https://chrome.browserless.io/content?token=${token}`;
+        const resp = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            url: targetUrl,
+            waitUntil: 'networkidle2',
+            timeout: 45000,
+          }),
+        });
+        if (!resp.ok) {
+          const bodySnippet = await safeReadText(resp, 300);
+          return {
+            ok: false,
+            error: `browserless_${resp.status}`,
+            html: '',
+            bodySnippet,
+          };
+        }
+        const html = await resp.text();
+        return { ok: true, html };
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : 'browserless_failed', html: '' };
       }
     };
     const fetchSupercasaWithPlaywright = async (targetUrl) => {
@@ -605,16 +643,6 @@ async function handleRealEstateData(req, res) {
     let supercasa = [];
     const warnings = [];
 
-    const safeReadText = async (response, limit) => {
-      try {
-        const text = await response.text();
-        if (!text) return '';
-        return text.slice(0, limit);
-      } catch {
-        return '';
-      }
-    };
-
     if (imovirtualRes.ok) {
       const imovirtualJson = await imovirtualRes.json();
       imovirtual = parseImovirtual(imovirtualJson);
@@ -632,32 +660,44 @@ async function handleRealEstateData(req, res) {
     if (supercasaRes.ok) {
       const supercasaHtml = await supercasaRes.text();
       if (/Just a moment/i.test(supercasaHtml)) {
-        const pw = await fetchSupercasaWithPlaywright();
-        if (pw.ok) {
-          supercasa = parseSupercasa(pw.html);
+        const bl = await fetchSupercasaWithBrowserless(supercasaUrl);
+        if (bl.ok) {
+          supercasa = parseSupercasa(bl.html);
         } else {
-          warnings.push({
-            source: 'supercasa',
-            error: pw.error || 'supercasa_cloudflare',
-          });
+          const pw = await fetchSupercasaWithPlaywright(supercasaUrl);
+          if (pw.ok) {
+            supercasa = parseSupercasa(pw.html);
+          } else {
+            warnings.push({
+              source: 'supercasa',
+              error: pw.error || bl.error || 'supercasa_cloudflare',
+              browserlessError: bl.error || undefined,
+            });
+          }
         }
       } else {
         supercasa = parseSupercasa(supercasaHtml);
       }
     } else {
       const bodySnippet = await safeReadText(supercasaRes, 300);
-      const pw = await fetchSupercasaWithPlaywright(supercasaUrl);
-      if (pw.ok) {
-        supercasa = parseSupercasa(pw.html);
+      const bl = await fetchSupercasaWithBrowserless(supercasaUrl);
+      if (bl.ok) {
+        supercasa = parseSupercasa(bl.html);
       } else {
-        warnings.push({
-          source: 'supercasa',
-          error: 'supercasa_unavailable',
-          status: supercasaRes.status,
-          statusText: supercasaRes.statusText,
-          bodySnippet,
-          playwrightError: pw.error || undefined,
-        });
+        const pw = await fetchSupercasaWithPlaywright(supercasaUrl);
+        if (pw.ok) {
+          supercasa = parseSupercasa(pw.html);
+        } else {
+          warnings.push({
+            source: 'supercasa',
+            error: 'supercasa_unavailable',
+            status: supercasaRes.status,
+            statusText: supercasaRes.statusText,
+            bodySnippet,
+            playwrightError: pw.error || undefined,
+            browserlessError: bl.error || undefined,
+          });
+        }
       }
     }
 
