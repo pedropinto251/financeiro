@@ -540,27 +540,31 @@ async function handleRealEstateData(req, res) {
         return '';
       }
     };
-    const getPlaywright = () => {
-      try {
-        // Lazy optional dependency
-        return require('playwright');
-      } catch {
-        return null;
-      }
-    };
     const fetchSupercasaWithBrowserless = async (targetUrl) => {
       const token = process.env.BROWSERLESS_TOKEN;
       if (!token) return { ok: false, error: 'browserless_token_missing', html: '' };
       try {
-        const endpoint = `https://chrome.browserless.io/content?token=${token}`;
+        const endpoint = `https://chrome.browserless.io/function?token=${token}`;
+        const code = `export default async function ({ page }) {
+  await page.setUserAgent(${JSON.stringify(headersCommon['user-agent'])});
+  await page.setViewport({ width: 1366, height: 768 });
+  await page.setExtraHTTPHeaders({
+    'accept-language': ${JSON.stringify(headersCommon['accept-language'])},
+  });
+  await page.goto(${JSON.stringify(targetUrl)}, { waitUntil: 'domcontentloaded' });
+  try {
+    await page.waitForSelector('.list-properties', { timeout: 15000 });
+  } catch (err) {
+    const title = await page.title();
+    return { data: { error: 'selector_timeout', title }, type: 'application/json' };
+  }
+  const html = await page.content();
+  return { data: html, type: 'text/html' };
+}`;
         const resp = await fetch(endpoint, {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            url: targetUrl,
-            waitUntil: 'networkidle2',
-            timeout: 45000,
-          }),
+          headers: { 'content-type': 'application/javascript' },
+          body: code,
         });
         if (!resp.ok) {
           const bodySnippet = await safeReadText(resp, 300);
@@ -571,56 +575,52 @@ async function handleRealEstateData(req, res) {
             bodySnippet,
           };
         }
-        const html = await resp.text();
+        const bodyText = await resp.text();
+        const contentType = resp.headers.get('content-type') || '';
+        let html = '';
+        if (contentType.includes('application/json')) {
+          try {
+            const payload = JSON.parse(bodyText);
+            if (payload && payload.type === 'text/html' && typeof payload.data === 'string') {
+              html = payload.data;
+            } else {
+              return {
+                ok: false,
+                error: 'browserless_empty',
+                html: '',
+                bodySnippet: JSON.stringify(payload).slice(0, 300),
+              };
+            }
+          } catch {
+            return {
+              ok: false,
+              error: 'browserless_parse_failed',
+              html: '',
+              bodySnippet: bodyText.slice(0, 300),
+            };
+          }
+        } else {
+          html = bodyText;
+        }
+        if (/Just a moment/i.test(html)) {
+          return {
+            ok: false,
+            error: 'browserless_blocked',
+            html,
+            bodySnippet: html.slice(0, 300),
+          };
+        }
+        if (!/list-properties/i.test(html)) {
+          return {
+            ok: false,
+            error: 'browserless_empty',
+            html,
+            bodySnippet: html.slice(0, 300),
+          };
+        }
         return { ok: true, html };
       } catch (err) {
         return { ok: false, error: err instanceof Error ? err.message : 'browserless_failed', html: '' };
-      }
-    };
-    const fetchSupercasaWithPlaywright = async (targetUrl) => {
-      const playwright = getPlaywright();
-      if (!playwright) {
-        return { ok: false, error: 'playwright_missing', html: '' };
-      }
-      const browser = await playwright.chromium.launch({ headless: true });
-      try {
-        const context = await browser.newContext({
-          userAgent: headersCommon['user-agent'],
-          locale: 'pt-PT',
-          viewport: { width: 1280, height: 720 },
-        });
-        const page = await context.newPage();
-        await page.setExtraHTTPHeaders({
-          'accept-language': headersCommon['accept-language'],
-        });
-
-        const maxAttempts = 2;
-        for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-          await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 45000 });
-          await page.waitForTimeout(1500);
-          await page.waitForLoadState('networkidle', { timeout: 45000 }).catch(() => {});
-
-          const title = await page.title();
-          if (!/just a moment/i.test(title)) {
-            const hasList = await page.$('.list-properties');
-            if (hasList) {
-              const html = await page.content();
-              await context.close();
-              return { ok: true, html };
-            }
-          }
-
-          // still blocked or list not ready: wait a bit and retry once
-          await page.waitForTimeout(4000);
-        }
-
-        const html = await page.content();
-        await context.close();
-        return { ok: !/Just a moment/i.test(html), html, error: 'playwright_blocked' };
-      } catch (err) {
-        return { ok: false, error: err instanceof Error ? err.message : 'playwright_failed', html: '' };
-      } finally {
-        await browser.close();
       }
     };
     const extraSupercasaHeaders = getExtraHeadersFromEnv();
@@ -641,6 +641,10 @@ async function handleRealEstateData(req, res) {
 
     let imovirtual = [];
     let supercasa = [];
+    const methods = {
+      imovirtual: 'fetch',
+      supercasa: 'fetch',
+    };
     const warnings = [];
 
     if (imovirtualRes.ok) {
@@ -663,45 +667,41 @@ async function handleRealEstateData(req, res) {
         const bl = await fetchSupercasaWithBrowserless(supercasaUrl);
         if (bl.ok) {
           supercasa = parseSupercasa(bl.html);
+          methods.supercasa = 'browserless';
         } else {
-          const pw = await fetchSupercasaWithPlaywright(supercasaUrl);
-          if (pw.ok) {
-            supercasa = parseSupercasa(pw.html);
-          } else {
-            warnings.push({
-              source: 'supercasa',
-              error: pw.error || bl.error || 'supercasa_cloudflare',
-              browserlessError: bl.error || undefined,
-            });
-          }
+          warnings.push({
+            source: 'supercasa',
+            error: bl.error || 'supercasa_cloudflare',
+            browserlessError: bl.error || undefined,
+            browserlessBody: bl.bodySnippet || undefined,
+          });
+          methods.supercasa = bl.error === 'browserless_empty' ? 'browserless_empty' : 'blocked';
         }
       } else {
         supercasa = parseSupercasa(supercasaHtml);
+        methods.supercasa = 'fetch';
       }
     } else {
       const bodySnippet = await safeReadText(supercasaRes, 300);
       const bl = await fetchSupercasaWithBrowserless(supercasaUrl);
       if (bl.ok) {
         supercasa = parseSupercasa(bl.html);
+        methods.supercasa = 'browserless';
       } else {
-        const pw = await fetchSupercasaWithPlaywright(supercasaUrl);
-        if (pw.ok) {
-          supercasa = parseSupercasa(pw.html);
-        } else {
-          warnings.push({
-            source: 'supercasa',
-            error: 'supercasa_unavailable',
-            status: supercasaRes.status,
-            statusText: supercasaRes.statusText,
-            bodySnippet,
-            playwrightError: pw.error || undefined,
-            browserlessError: bl.error || undefined,
-          });
-        }
+        warnings.push({
+          source: 'supercasa',
+          error: 'supercasa_unavailable',
+          status: supercasaRes.status,
+          statusText: supercasaRes.statusText,
+          bodySnippet,
+          browserlessError: bl.error || undefined,
+          browserlessBody: bl.bodySnippet || undefined,
+        });
+        methods.supercasa = bl.error === 'browserless_empty' ? 'browserless_empty' : 'blocked';
       }
     }
 
-    return res.json({ imovirtual, supercasa, warnings, page, district, council });
+    return res.json({ imovirtual, supercasa, warnings, methods, page, district, council });
   } catch (err) {
     console.error('realestate:data failed', err);
     return res.status(500).json({

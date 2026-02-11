@@ -185,13 +185,19 @@
           return card;
         };
 
-        const renderSection = (title, items, id) => {
+        const renderSection = (title, items, id, method) => {
           const wrapper = document.createElement('div');
           wrapper.className = 'estate-section';
           if (id) wrapper.id = id;
 
           const heading = document.createElement('h2');
           heading.textContent = `${title} (${items.length})`;
+          if (method) {
+            const badge = document.createElement('span');
+            badge.className = 'estate-method';
+            badge.textContent = method;
+            heading.appendChild(badge);
+          }
 
           const grid = document.createElement('div');
           grid.className = 'estate-grid';
@@ -237,8 +243,8 @@
             }
             const sections = document.createElement('div');
             sections.className = 'estate-sections';
-            sections.appendChild(renderSection('Imovirtual', imovirtual, 'estate-imovirtual'));
-            sections.appendChild(renderSection('Supercasa', supercasa, 'estate-supercasa'));
+            sections.appendChild(renderSection('Imovirtual', imovirtual, 'estate-imovirtual', data.methods && data.methods.imovirtual));
+            sections.appendChild(renderSection('Supercasa', supercasa, 'estate-supercasa', data.methods && data.methods.supercasa));
             content.appendChild(sections);
           } catch (err) {
             content.innerHTML = '<div class="estate-status error">Erro ao carregar dados.</div>';
