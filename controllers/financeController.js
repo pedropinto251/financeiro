@@ -113,6 +113,11 @@ const ROOM_MAP = {
   EIGHT: 8,
 };
 
+const CASACERTA_LOCATION_CACHE = {
+  // fallback cache for production if placesvue is blocked
+  'aveiro|espinho': 2239,
+};
+
 function getExtraHeadersFromEnv() {
   const raw = process.env.SUPERCASA_HEADERS_JSON;
   if (!raw) return {};
@@ -937,6 +942,7 @@ async function handleRealEstateData(req, res) {
         const places = await placesRes.json();
         const selected = selectCasacertaLocation(places);
         if (selected && selected.api_id) {
+          CASACERTA_LOCATION_CACHE[`${district}|${council}`] = selected.api_id;
           const casacertaUrl = `https://casacerta.pt/imoveis?finalidade=Venda&proptype=1%2C2%2C7&county=${encodeURIComponent(
             selected.api_id
           )}&useRef=useRef&pageNo=${page}`;
@@ -968,20 +974,85 @@ async function handleRealEstateData(req, res) {
         }
       } else {
         const bodySnippet = await safeReadText(placesRes, 300);
-        warnings.push({
-          source: 'casacerta',
-          error: 'casacerta_places_unavailable',
-          status: placesRes.status,
-          statusText: placesRes.statusText,
-          bodySnippet,
-        });
+        const cachedId = CASACERTA_LOCATION_CACHE[`${district}|${council}`];
+        if (cachedId) {
+          const casacertaUrl = `https://casacerta.pt/imoveis?finalidade=Venda&proptype=1%2C2%2C7&county=${encodeURIComponent(
+            cachedId
+          )}&useRef=useRef&pageNo=${page}`;
+          const casacertaRes = await fetch(casacertaUrl, {
+            headers: {
+              accept: '*/*',
+              ...headersCommon,
+              referer: 'https://casacerta.pt/',
+            },
+          });
+          if (casacertaRes.ok) {
+            const casacertaHtml = await casacertaRes.text();
+            casacerta = parseCasacerta(casacertaHtml);
+          } else {
+            const listSnippet = await safeReadText(casacertaRes, 300);
+            warnings.push({
+              source: 'casacerta',
+              error: 'casacerta_unavailable',
+              status: casacertaRes.status,
+              statusText: casacertaRes.statusText,
+              bodySnippet: listSnippet,
+              fallback: 'cache',
+            });
+          }
+        } else {
+          warnings.push({
+            source: 'casacerta',
+            error: 'casacerta_places_unavailable',
+            status: placesRes.status,
+            statusText: placesRes.statusText,
+            bodySnippet,
+          });
+        }
       }
     } catch (err) {
-      warnings.push({
-        source: 'casacerta',
-        error: 'casacerta_failed',
-        message: err instanceof Error ? err.message : 'unknown',
-      });
+      const cachedId = CASACERTA_LOCATION_CACHE[`${district}|${council}`];
+      if (cachedId) {
+        try {
+          const casacertaUrl = `https://casacerta.pt/imoveis?finalidade=Venda&proptype=1%2C2%2C7&county=${encodeURIComponent(
+            cachedId
+          )}&useRef=useRef&pageNo=${page}`;
+          const casacertaRes = await fetch(casacertaUrl, {
+            headers: {
+              accept: '*/*',
+              ...headersCommon,
+              referer: 'https://casacerta.pt/',
+            },
+          });
+          if (casacertaRes.ok) {
+            const casacertaHtml = await casacertaRes.text();
+            casacerta = parseCasacerta(casacertaHtml);
+          } else {
+            const listSnippet = await safeReadText(casacertaRes, 300);
+            warnings.push({
+              source: 'casacerta',
+              error: 'casacerta_unavailable',
+              status: casacertaRes.status,
+              statusText: casacertaRes.statusText,
+              bodySnippet: listSnippet,
+              fallback: 'cache',
+            });
+          }
+        } catch (fallbackErr) {
+          warnings.push({
+            source: 'casacerta',
+            error: 'casacerta_failed',
+            message: fallbackErr instanceof Error ? fallbackErr.message : 'unknown',
+            fallback: 'cache',
+          });
+        }
+      } else {
+        warnings.push({
+          source: 'casacerta',
+          error: 'casacerta_failed',
+          message: err instanceof Error ? err.message : 'unknown',
+        });
+      }
     }
 
     try {
