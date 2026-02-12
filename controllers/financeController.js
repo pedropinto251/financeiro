@@ -142,6 +142,11 @@ function getCasayesHeadersFromEnv() {
   return headers;
 }
 
+const buildBrowserlessFunction = (code) => ({
+  endpoint: `https://chrome.browserless.io/function?token=${process.env.BROWSERLESS_TOKEN || ''}`,
+  code,
+});
+
 function decodeHtml(input) {
   if (!input) return '';
   return String(input).replace(/&(#x?[0-9a-fA-F]+|[a-zA-Z]+);/g, (match, code) => {
@@ -830,6 +835,111 @@ async function handleRealEstateData(req, res) {
         return { ok: false, error: err instanceof Error ? err.message : 'browserless_failed', html: '' };
       }
     };
+    const fetchCasacertaHtmlWithBrowserless = async (targetUrl) => {
+      const token = process.env.BROWSERLESS_TOKEN;
+      if (!token) return { ok: false, error: 'browserless_token_missing', html: '' };
+      try {
+        const endpoint = `https://chrome.browserless.io/function?token=${token}`;
+        const code = `export default async function ({ page }) {
+  await page.setUserAgent(${JSON.stringify(headersCommon['user-agent'])});
+  await page.setViewport({ width: 1366, height: 768 });
+  await page.setExtraHTTPHeaders({
+    'accept-language': ${JSON.stringify(headersCommon['accept-language'])},
+  });
+  await page.goto(${JSON.stringify(targetUrl)}, { waitUntil: 'domcontentloaded' });
+  try {
+    await page.waitForSelector('.property-ad-in-list-really', { timeout: 15000 });
+  } catch (err) {
+    const title = await page.title();
+    return { data: { error: 'selector_timeout', title }, type: 'application/json' };
+  }
+  const html = await page.content();
+  return { data: html, type: 'text/html' };
+}`;
+        const resp = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'content-type': 'application/javascript' },
+          body: code,
+        });
+        if (!resp.ok) {
+          const bodySnippet = await safeReadText(resp, 300);
+          return { ok: false, error: `browserless_${resp.status}`, html: '', bodySnippet };
+        }
+        const bodyText = await resp.text();
+        const contentType = resp.headers.get('content-type') || '';
+        let html = '';
+        if (contentType.includes('application/json')) {
+          try {
+            const payload = JSON.parse(bodyText);
+            if (payload && payload.type === 'text/html' && typeof payload.data === 'string') {
+              html = payload.data;
+            } else {
+              return { ok: false, error: 'browserless_empty', html: '', bodySnippet: JSON.stringify(payload).slice(0, 300) };
+            }
+          } catch {
+            return { ok: false, error: 'browserless_parse_failed', html: '', bodySnippet: bodyText.slice(0, 300) };
+          }
+        } else {
+          html = bodyText;
+        }
+        if (/Just a moment/i.test(html)) {
+          return { ok: false, error: 'browserless_blocked', html, bodySnippet: html.slice(0, 300) };
+        }
+        if (!/property-ad-in-list-really/i.test(html)) {
+          return { ok: false, error: 'browserless_empty', html, bodySnippet: html.slice(0, 300) };
+        }
+        return { ok: true, html };
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : 'browserless_failed', html: '' };
+      }
+    };
+    const fetchCasacertaPlacesWithBrowserless = async (locaisValue) => {
+      const token = process.env.BROWSERLESS_TOKEN;
+      if (!token) return { ok: false, error: 'browserless_token_missing', data: null };
+      try {
+        const endpoint = `https://chrome.browserless.io/function?token=${token}`;
+        const url = `https://casacerta.pt/api/placesvue?locais=${encodeURIComponent(locaisValue)}&format=json`;
+        const code = `export default async function ({ page }) {
+  await page.setUserAgent(${JSON.stringify(headersCommon['user-agent'])});
+  await page.setViewport({ width: 1366, height: 768 });
+  await page.setExtraHTTPHeaders({
+    'accept-language': ${JSON.stringify(headersCommon['accept-language'])},
+  });
+  await page.goto('https://casacerta.pt/', { waitUntil: 'domcontentloaded' });
+  const resp = await page.evaluate(async (target) => {
+    const r = await fetch(target, { credentials: 'include' });
+    const text = await r.text();
+    return { ok: r.ok, status: r.status, text };
+  }, ${JSON.stringify(url)});
+  return { data: resp, type: 'application/json' };
+}`;
+        const resp = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'content-type': 'application/javascript' },
+          body: code,
+        });
+        if (!resp.ok) {
+          const bodySnippet = await safeReadText(resp, 300);
+          return { ok: false, error: `browserless_${resp.status}`, data: null, bodySnippet };
+        }
+        const payload = await resp.json();
+        if (!payload || !payload.data) {
+          return { ok: false, error: 'browserless_empty', data: null, bodySnippet: JSON.stringify(payload).slice(0, 300) };
+        }
+        const parsed = payload.data;
+        if (!parsed.ok) {
+          return { ok: false, error: 'browserless_places_failed', data: null, bodySnippet: String(parsed.text || '').slice(0, 300) };
+        }
+        try {
+          const data = JSON.parse(parsed.text);
+          return { ok: true, data };
+        } catch {
+          return { ok: false, error: 'browserless_parse_failed', data: null, bodySnippet: String(parsed.text || '').slice(0, 300) };
+        }
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : 'browserless_failed', data: null };
+      }
+    };
     const extraSupercasaHeaders = getExtraHeadersFromEnv();
     const [imovirtualRes, supercasaRes] = await Promise.all([
       fetch(imovirtualUrl, {
@@ -955,16 +1065,39 @@ async function handleRealEstateData(req, res) {
           });
           if (casacertaRes.ok) {
             const casacertaHtml = await casacertaRes.text();
-            casacerta = parseCasacerta(casacertaHtml);
+            if (/Just a moment/i.test(casacertaHtml)) {
+              const blHtml = await fetchCasacertaHtmlWithBrowserless(casacertaUrl);
+              if (blHtml.ok) {
+                casacerta = parseCasacerta(blHtml.html);
+                methods.casacerta = 'browserless';
+              } else {
+                warnings.push({
+                  source: 'casacerta',
+                  error: blHtml.error || 'casacerta_browserless_failed',
+                  browserlessError: blHtml.error || undefined,
+                  bodySnippet: blHtml.bodySnippet || undefined,
+                });
+              }
+            } else {
+              casacerta = parseCasacerta(casacertaHtml);
+            }
           } else {
             const bodySnippet = await safeReadText(casacertaRes, 300);
-            warnings.push({
-              source: 'casacerta',
-              error: 'casacerta_unavailable',
-              status: casacertaRes.status,
-              statusText: casacertaRes.statusText,
-              bodySnippet,
-            });
+            const blHtml = await fetchCasacertaHtmlWithBrowserless(casacertaUrl);
+            if (blHtml.ok) {
+              casacerta = parseCasacerta(blHtml.html);
+              methods.casacerta = 'browserless';
+            } else {
+              warnings.push({
+                source: 'casacerta',
+                error: 'casacerta_unavailable',
+                status: casacertaRes.status,
+                statusText: casacertaRes.statusText,
+                bodySnippet,
+                browserlessError: blHtml.error || undefined,
+                browserlessBody: blHtml.bodySnippet || undefined,
+              });
+            }
           }
         } else {
           warnings.push({
@@ -988,26 +1121,80 @@ async function handleRealEstateData(req, res) {
           });
           if (casacertaRes.ok) {
             const casacertaHtml = await casacertaRes.text();
-            casacerta = parseCasacerta(casacertaHtml);
+            if (/Just a moment/i.test(casacertaHtml)) {
+              const blHtml = await fetchCasacertaHtmlWithBrowserless(casacertaUrl);
+              if (blHtml.ok) {
+                casacerta = parseCasacerta(blHtml.html);
+                methods.casacerta = 'browserless';
+              } else {
+                warnings.push({
+                  source: 'casacerta',
+                  error: blHtml.error || 'casacerta_browserless_failed',
+                  browserlessError: blHtml.error || undefined,
+                  bodySnippet: blHtml.bodySnippet || undefined,
+                  fallback: 'cache',
+                });
+              }
+            } else {
+              casacerta = parseCasacerta(casacertaHtml);
+            }
           } else {
             const listSnippet = await safeReadText(casacertaRes, 300);
-            warnings.push({
-              source: 'casacerta',
-              error: 'casacerta_unavailable',
-              status: casacertaRes.status,
-              statusText: casacertaRes.statusText,
-              bodySnippet: listSnippet,
-              fallback: 'cache',
-            });
+            const blHtml = await fetchCasacertaHtmlWithBrowserless(casacertaUrl);
+            if (blHtml.ok) {
+              casacerta = parseCasacerta(blHtml.html);
+              methods.casacerta = 'browserless';
+            } else {
+              warnings.push({
+                source: 'casacerta',
+                error: 'casacerta_unavailable',
+                status: casacertaRes.status,
+                statusText: casacertaRes.statusText,
+                bodySnippet: listSnippet,
+                browserlessError: blHtml.error || undefined,
+                browserlessBody: blHtml.bodySnippet || undefined,
+                fallback: 'cache',
+              });
+            }
           }
         } else {
-          warnings.push({
-            source: 'casacerta',
-            error: 'casacerta_places_unavailable',
-            status: placesRes.status,
-            statusText: placesRes.statusText,
-            bodySnippet,
-          });
+          const blPlaces = await fetchCasacertaPlacesWithBrowserless(councilRaw || council);
+          if (blPlaces.ok && blPlaces.data) {
+            const selected = selectCasacertaLocation(blPlaces.data);
+            if (selected && selected.api_id) {
+              CASACERTA_LOCATION_CACHE[`${district}|${council}`] = selected.api_id;
+              const casacertaUrl = `https://casacerta.pt/imoveis?finalidade=Venda&proptype=1%2C2%2C7&county=${encodeURIComponent(
+                selected.api_id
+              )}&useRef=useRef&pageNo=${page}`;
+              const blHtml = await fetchCasacertaHtmlWithBrowserless(casacertaUrl);
+              if (blHtml.ok) {
+                casacerta = parseCasacerta(blHtml.html);
+                methods.casacerta = 'browserless';
+              } else {
+                warnings.push({
+                  source: 'casacerta',
+                  error: blHtml.error || 'casacerta_browserless_failed',
+                  browserlessError: blHtml.error || undefined,
+                  bodySnippet: blHtml.bodySnippet || undefined,
+                });
+              }
+            } else {
+              warnings.push({
+                source: 'casacerta',
+                error: 'casacerta_location_not_found',
+              });
+            }
+          } else {
+            warnings.push({
+              source: 'casacerta',
+              error: 'casacerta_places_unavailable',
+              status: placesRes.status,
+              statusText: placesRes.statusText,
+              bodySnippet,
+              browserlessError: blPlaces.error || undefined,
+              browserlessBody: blPlaces.bodySnippet || undefined,
+            });
+          }
         }
       }
     } catch (err) {
@@ -1026,32 +1213,118 @@ async function handleRealEstateData(req, res) {
           });
           if (casacertaRes.ok) {
             const casacertaHtml = await casacertaRes.text();
-            casacerta = parseCasacerta(casacertaHtml);
+            if (/Just a moment/i.test(casacertaHtml)) {
+              const blHtml = await fetchCasacertaHtmlWithBrowserless(casacertaUrl);
+              if (blHtml.ok) {
+                casacerta = parseCasacerta(blHtml.html);
+                methods.casacerta = 'browserless';
+              } else {
+                warnings.push({
+                  source: 'casacerta',
+                  error: blHtml.error || 'casacerta_browserless_failed',
+                  browserlessError: blHtml.error || undefined,
+                  bodySnippet: blHtml.bodySnippet || undefined,
+                  fallback: 'cache',
+                });
+              }
+            } else {
+              casacerta = parseCasacerta(casacertaHtml);
+            }
           } else {
             const listSnippet = await safeReadText(casacertaRes, 300);
-            warnings.push({
-              source: 'casacerta',
-              error: 'casacerta_unavailable',
-              status: casacertaRes.status,
-              statusText: casacertaRes.statusText,
-              bodySnippet: listSnippet,
-              fallback: 'cache',
-            });
+            const blHtml = await fetchCasacertaHtmlWithBrowserless(casacertaUrl);
+            if (blHtml.ok) {
+              casacerta = parseCasacerta(blHtml.html);
+              methods.casacerta = 'browserless';
+            } else {
+              warnings.push({
+                source: 'casacerta',
+                error: 'casacerta_unavailable',
+                status: casacertaRes.status,
+                statusText: casacertaRes.statusText,
+                bodySnippet: listSnippet,
+                browserlessError: blHtml.error || undefined,
+                browserlessBody: blHtml.bodySnippet || undefined,
+                fallback: 'cache',
+              });
+            }
           }
         } catch (fallbackErr) {
+          const blPlaces = await fetchCasacertaPlacesWithBrowserless(councilRaw || council);
+          if (blPlaces.ok && blPlaces.data) {
+            const selected = selectCasacertaLocation(blPlaces.data);
+            if (selected && selected.api_id) {
+              CASACERTA_LOCATION_CACHE[`${district}|${council}`] = selected.api_id;
+              const casacertaUrl = `https://casacerta.pt/imoveis?finalidade=Venda&proptype=1%2C2%2C7&county=${encodeURIComponent(
+                selected.api_id
+              )}&useRef=useRef&pageNo=${page}`;
+              const blHtml = await fetchCasacertaHtmlWithBrowserless(casacertaUrl);
+              if (blHtml.ok) {
+                casacerta = parseCasacerta(blHtml.html);
+                methods.casacerta = 'browserless';
+              } else {
+                warnings.push({
+                  source: 'casacerta',
+                  error: blHtml.error || 'casacerta_browserless_failed',
+                  browserlessError: blHtml.error || undefined,
+                  bodySnippet: blHtml.bodySnippet || undefined,
+                  fallback: 'cache',
+                });
+              }
+            } else {
+              warnings.push({
+                source: 'casacerta',
+                error: 'casacerta_location_not_found',
+                fallback: 'cache',
+              });
+            }
+          } else {
+            warnings.push({
+              source: 'casacerta',
+              error: 'casacerta_failed',
+              message: fallbackErr instanceof Error ? fallbackErr.message : 'unknown',
+              fallback: 'cache',
+              browserlessError: blPlaces.error || undefined,
+              browserlessBody: blPlaces.bodySnippet || undefined,
+            });
+          }
+        }
+      } else {
+        const blPlaces = await fetchCasacertaPlacesWithBrowserless(councilRaw || council);
+        if (blPlaces.ok && blPlaces.data) {
+          const selected = selectCasacertaLocation(blPlaces.data);
+          if (selected && selected.api_id) {
+            CASACERTA_LOCATION_CACHE[`${district}|${council}`] = selected.api_id;
+            const casacertaUrl = `https://casacerta.pt/imoveis?finalidade=Venda&proptype=1%2C2%2C7&county=${encodeURIComponent(
+              selected.api_id
+            )}&useRef=useRef&pageNo=${page}`;
+            const blHtml = await fetchCasacertaHtmlWithBrowserless(casacertaUrl);
+            if (blHtml.ok) {
+              casacerta = parseCasacerta(blHtml.html);
+              methods.casacerta = 'browserless';
+            } else {
+              warnings.push({
+                source: 'casacerta',
+                error: blHtml.error || 'casacerta_browserless_failed',
+                browserlessError: blHtml.error || undefined,
+                bodySnippet: blHtml.bodySnippet || undefined,
+              });
+            }
+          } else {
+            warnings.push({
+              source: 'casacerta',
+              error: 'casacerta_location_not_found',
+            });
+          }
+        } else {
           warnings.push({
             source: 'casacerta',
             error: 'casacerta_failed',
-            message: fallbackErr instanceof Error ? fallbackErr.message : 'unknown',
-            fallback: 'cache',
+            message: err instanceof Error ? err.message : 'unknown',
+            browserlessError: blPlaces.error || undefined,
+            browserlessBody: blPlaces.bodySnippet || undefined,
           });
         }
-      } else {
-        warnings.push({
-          source: 'casacerta',
-          error: 'casacerta_failed',
-          message: err instanceof Error ? err.message : 'unknown',
-        });
       }
     }
 
