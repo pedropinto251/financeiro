@@ -59,6 +59,42 @@
             Pagina
             <input type="number" id="estate-page" min="1" value="1" />
           </label>
+          <label>
+            Preco minimo
+            <input type="number" id="estate-price-min" min="0" placeholder="0" />
+          </label>
+          <label>
+            Preco maximo
+            <input type="number" id="estate-price-max" min="0" placeholder="1000000" />
+          </label>
+          <label>
+            Tipologia
+            <select id="estate-rooms">
+              <option value="">Todas</option>
+              <option value="1">T1</option>
+              <option value="2">T2</option>
+              <option value="3">T3</option>
+              <option value="4">T4+</option>
+            </select>
+          </label>
+          <label>
+            Pesquisa
+            <input type="text" id="estate-search" placeholder="ex: varanda, praia" />
+          </label>
+          <label>
+            Ordenar
+            <select id="estate-sort">
+              <option value="relevance">Relevancia</option>
+              <option value="price_asc">Preco (baixo → alto)</option>
+              <option value="price_desc">Preco (alto → baixo)</option>
+              <option value="area_asc">Area (baixo → alto)</option>
+              <option value="area_desc">Area (alto → baixo)</option>
+              <option value="rooms_desc">Tipologia (alto → baixo)</option>
+              <option value="rooms_asc">Tipologia (baixo → alto)</option>
+              <option value="title_asc">Titulo (A → Z)</option>
+              <option value="title_desc">Titulo (Z → A)</option>
+            </select>
+          </label>
         </div>
         <div class="estate-jump estate-tabs">
           <button class="ghost-btn is-active" type="button" data-view="combined">Agregado</button>
@@ -105,6 +141,11 @@
         const pageInput = document.getElementById('estate-page');
         const districtList = document.getElementById('district-list');
         const councilList = document.getElementById('council-list');
+        const priceMinInput = document.getElementById('estate-price-min');
+        const priceMaxInput = document.getElementById('estate-price-max');
+        const roomsInput = document.getElementById('estate-rooms');
+        const searchInput = document.getElementById('estate-search');
+        const sortInput = document.getElementById('estate-sort');
 
         const districtOptions = {
           aveiro: ['espinho', 'aveiro', 'ilhavo', 'oliveira-de-azemeis', 'santa-maria-da-feira'],
@@ -179,6 +220,12 @@
           body.appendChild(source);
           body.appendChild(title);
           body.appendChild(meta);
+          if (item.description) {
+            const desc = document.createElement('p');
+            desc.className = 'estate-desc';
+            desc.textContent = item.description;
+            body.appendChild(desc);
+          }
 
           const link = document.createElement('a');
           link.className = 'estate-link';
@@ -220,6 +267,139 @@
           return wrapper;
         };
 
+        const parsePrice = (value) => {
+          if (!value) return null;
+          const num = String(value).replace(/[^\d]/g, '');
+          if (!num) return null;
+          return Number(num);
+        };
+
+        const parseRooms = (value) => {
+          if (!value) return null;
+          const match = String(value).match(/(\d+)/);
+          return match ? Number(match[1]) : null;
+        };
+
+        const parseArea = (value) => {
+          if (!value) return null;
+          const num = String(value).replace(/[^\d]/g, '');
+          if (!num) return null;
+          return Number(num);
+        };
+
+        const applySort = (items) => {
+          const mode = sortInput.value || 'relevance';
+          const list = [...items];
+          const compareText = (a, b, field, dir) => {
+            const av = String(a[field] || '').toLowerCase();
+            const bv = String(b[field] || '').toLowerCase();
+            if (av === bv) return 0;
+            return dir === 'asc' ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
+          };
+          switch (mode) {
+            case 'price_asc':
+              return list.sort((a, b) => (parsePrice(a.price) ?? Infinity) - (parsePrice(b.price) ?? Infinity));
+            case 'price_desc':
+              return list.sort((a, b) => (parsePrice(b.price) ?? -Infinity) - (parsePrice(a.price) ?? -Infinity));
+            case 'area_asc':
+              return list.sort((a, b) => (parseArea(a.area) ?? Infinity) - (parseArea(b.area) ?? Infinity));
+            case 'area_desc':
+              return list.sort((a, b) => (parseArea(b.area) ?? -Infinity) - (parseArea(a.area) ?? -Infinity));
+            case 'rooms_asc':
+              return list.sort((a, b) => (parseRooms(a.rooms) ?? Infinity) - (parseRooms(b.rooms) ?? Infinity));
+            case 'rooms_desc':
+              return list.sort((a, b) => (parseRooms(b.rooms) ?? -Infinity) - (parseRooms(a.rooms) ?? -Infinity));
+            case 'title_asc':
+              return list.sort((a, b) => compareText(a, b, 'title', 'asc'));
+            case 'title_desc':
+              return list.sort((a, b) => compareText(a, b, 'title', 'desc'));
+            default:
+              return list;
+          }
+        };
+
+        const applyFilters = (items) => {
+          const min = Number(priceMinInput.value || 0) || 0;
+          const max = Number(priceMaxInput.value || 0) || 0;
+          const rooms = roomsInput.value ? Number(roomsInput.value) : null;
+          const text = (searchInput.value || '').trim().toLowerCase();
+
+          return items.filter((item) => {
+            const priceNum = parsePrice(item.price);
+            if (min && (!priceNum || priceNum < min)) return false;
+            if (max && (!priceNum || priceNum > max)) return false;
+
+            if (rooms !== null) {
+              const itemRooms = parseRooms(item.rooms);
+              if (!itemRooms) return false;
+              if (rooms >= 4 && itemRooms < 4) return false;
+              if (rooms < 4 && itemRooms !== rooms) return false;
+            }
+
+            if (text) {
+              const haystack = `${item.title || ''} ${item.description || ''}`.toLowerCase();
+              if (!haystack.includes(text)) return false;
+            }
+
+          return true;
+        });
+        };
+
+        let latestData = null;
+        let currentView = 'combined';
+        const renderFromData = (data) => {
+          if (!data) return;
+          const imovirtual = applySort(applyFilters(Array.isArray(data.imovirtual) ? data.imovirtual : []));
+          const supercasa = applySort(applyFilters(Array.isArray(data.supercasa) ? data.supercasa : []));
+          const casacerta = applySort(applyFilters(Array.isArray(data.casacerta) ? data.casacerta : []));
+          const casayes = applySort(applyFilters(Array.isArray(data.casayes) ? data.casayes : []));
+          const combined = applySort(applyFilters(Array.isArray(data.combined) ? data.combined : []));
+          const totalCount = combined.length;
+          total.textContent = String(totalCount);
+
+          content.innerHTML = '';
+          if (Array.isArray(data.warnings) && data.warnings.length) {
+            const warn = document.createElement('div');
+            warn.className = 'estate-status error';
+            const lines = data.warnings.map((w) => {
+              if (typeof w === 'string') return w;
+              const parts = [w.source || 'fonte', w.error || 'erro'];
+              if (w.status) parts.push(`status ${w.status}`);
+              if (w.statusText) parts.push(w.statusText);
+              if (w.bodySnippet) parts.push(w.bodySnippet.replace(/\n/g, ' ').slice(0, 140));
+              return parts.join(' | ');
+            });
+            warn.textContent = `Aviso: ${lines.join(' / ')}`;
+            content.appendChild(warn);
+          }
+          const sections = document.createElement('div');
+          sections.className = 'estate-sections';
+          sections.appendChild(renderSection('Agregado', combined, 'estate-combined', 'dedupe'));
+          sections.appendChild(renderSection('Imovirtual', imovirtual, 'estate-imovirtual', data.methods && data.methods.imovirtual));
+          sections.appendChild(renderSection('Supercasa', supercasa, 'estate-supercasa', data.methods && data.methods.supercasa));
+          sections.appendChild(renderSection('Casa Certa', casacerta, 'estate-casacerta', data.methods && data.methods.casacerta));
+          sections.appendChild(renderSection('Casa Yes', casayes, 'estate-casayes', data.methods && data.methods.casayes));
+          content.appendChild(sections);
+          const setView = (view) => {
+            currentView = view || currentView || 'combined';
+            const map = {
+              combined: 'estate-combined',
+              imovirtual: 'estate-imovirtual',
+              supercasa: 'estate-supercasa',
+              casacerta: 'estate-casacerta',
+              casayes: 'estate-casayes',
+            };
+            Object.values(map).forEach((id) => {
+              const section = document.getElementById(id);
+              if (section) section.style.display = id === map[currentView] ? 'block' : 'none';
+            });
+            document.querySelectorAll('.estate-tabs [data-view]').forEach((btn) => {
+              btn.classList.toggle('is-active', btn.getAttribute('data-view') === currentView);
+            });
+          };
+          setView(currentView || 'combined');
+        };
+
         const load = async () => {
           content.innerHTML = '<div class="estate-status">A carregar...</div>';
           try {
@@ -229,61 +409,18 @@
             const res = await fetch(`/realestate/data?district=${encodeURIComponent(district)}&council=${encodeURIComponent(council)}&page=${page}`);
             if (!res.ok) throw new Error('Falha ao carregar');
             const data = await res.json();
-
-            const imovirtual = Array.isArray(data.imovirtual) ? data.imovirtual : [];
-            const supercasa = Array.isArray(data.supercasa) ? data.supercasa : [];
-            const casacerta = Array.isArray(data.casacerta) ? data.casacerta : [];
-            const casayes = Array.isArray(data.casayes) ? data.casayes : [];
-            const combined = Array.isArray(data.combined) ? data.combined : [];
-            const totalCount = combined.length;
-            total.textContent = String(totalCount);
-
-            content.innerHTML = '';
-            if (Array.isArray(data.warnings) && data.warnings.length) {
-              const warn = document.createElement('div');
-              warn.className = 'estate-status error';
-              const lines = data.warnings.map((w) => {
-                if (typeof w === 'string') return w;
-                const parts = [w.source || 'fonte', w.error || 'erro'];
-                if (w.status) parts.push(`status ${w.status}`);
-                if (w.statusText) parts.push(w.statusText);
-                if (w.bodySnippet) parts.push(w.bodySnippet.replace(/\n/g, ' ').slice(0, 140));
-                return parts.join(' | ');
-              });
-              warn.textContent = `Aviso: ${lines.join(' / ')}`;
-              content.appendChild(warn);
-            }
-            const sections = document.createElement('div');
-            sections.className = 'estate-sections';
-            sections.appendChild(renderSection('Agregado', combined, 'estate-combined', 'dedupe'));
-            sections.appendChild(renderSection('Imovirtual', imovirtual, 'estate-imovirtual', data.methods && data.methods.imovirtual));
-            sections.appendChild(renderSection('Supercasa', supercasa, 'estate-supercasa', data.methods && data.methods.supercasa));
-            sections.appendChild(renderSection('Casa Certa', casacerta, 'estate-casacerta', data.methods && data.methods.casacerta));
-            sections.appendChild(renderSection('Casa Yes', casayes, 'estate-casayes', data.methods && data.methods.casayes));
-            content.appendChild(sections);
-            const setView = (view) => {
-              const map = {
-                combined: 'estate-combined',
-                imovirtual: 'estate-imovirtual',
-                supercasa: 'estate-supercasa',
-                casacerta: 'estate-casacerta',
-                casayes: 'estate-casayes',
-              };
-              Object.values(map).forEach((id) => {
-                const section = document.getElementById(id);
-                if (section) section.style.display = id === map[view] ? 'block' : 'none';
-              });
-              document.querySelectorAll('.estate-tabs [data-view]').forEach((btn) => {
-                btn.classList.toggle('is-active', btn.getAttribute('data-view') === view);
-              });
-            };
-            setView('combined');
+            latestData = data;
+            renderFromData(latestData);
           } catch (err) {
             content.innerHTML = '<div class="estate-status error">Erro ao carregar dados.</div>';
           }
         };
 
         refreshBtn.addEventListener('click', load);
+        [priceMinInput, priceMaxInput, roomsInput, searchInput, sortInput].forEach((el) => {
+          el.addEventListener('input', () => renderFromData(latestData));
+          el.addEventListener('change', () => renderFromData(latestData));
+        });
         prevBtn.addEventListener('click', () => {
           const current = Math.max(1, Number(pageInput.value || 1));
           const next = Math.max(1, current - 1);
@@ -314,6 +451,7 @@
             const view = btn.getAttribute('data-view');
             const target = document.getElementById(`estate-${view}`);
             if (target) {
+              currentView = view || 'combined';
               document.querySelectorAll('.estate-section').forEach((section) => {
                 section.style.display = section === target ? 'block' : 'none';
               });
