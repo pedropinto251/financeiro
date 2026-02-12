@@ -11,7 +11,7 @@
     <header class="topbar">
       <div>
         <h1>Imoveis</h1>
-        <p class="muted">Teste rapido com Imovirtual e Supercasa</p>
+        <p class="muted">Teste rapido com Imovirtual, Supercasa e Casa Certa</p>
       </div>
     </header>
 
@@ -60,9 +60,12 @@
             <input type="number" id="estate-page" min="1" value="1" />
           </label>
         </div>
-        <div class="estate-jump">
-          <button class="ghost-btn" type="button" data-jump="imovirtual">Ir para Imovirtual</button>
-          <button class="ghost-btn" type="button" data-jump="supercasa">Ir para Supercasa</button>
+        <div class="estate-jump estate-tabs">
+          <button class="ghost-btn is-active" type="button" data-view="combined">Agregado</button>
+          <button class="ghost-btn" type="button" data-view="imovirtual">Imovirtual</button>
+          <button class="ghost-btn" type="button" data-view="supercasa">Supercasa</button>
+          <button class="ghost-btn" type="button" data-view="casacerta">Casa Certa</button>
+          <button class="ghost-btn" type="button" data-view="casayes">Casa Yes</button>
         </div>
         <p class="muted small">
           Nota: o Imovirtual usa um buildId no URL. Se falhar, tera de atualizar o link.
@@ -154,14 +157,20 @@
 
           const source = document.createElement('span');
           source.className = 'estate-source';
-          source.textContent = item.source;
+          if (Array.isArray(item.sources) && item.sources.length) {
+            source.textContent = item.sources.join(' + ');
+          } else {
+            source.textContent = item.source;
+          }
 
           const title = document.createElement('h3');
           title.textContent = item.title || 'Imovel';
 
           const meta = document.createElement('div');
           meta.className = 'estate-meta';
-          [item.price, item.rooms, item.area].filter(Boolean).forEach((txt) => {
+          const metaItems = [item.price, item.rooms, item.area];
+          if (Array.isArray(item.extras)) metaItems.push(...item.extras);
+          metaItems.filter(Boolean).forEach((txt) => {
             const span = document.createElement('span');
             span.textContent = txt;
             meta.appendChild(span);
@@ -174,13 +183,13 @@
           const link = document.createElement('a');
           link.className = 'estate-link';
           link.textContent = 'Abrir anuncio';
-          link.href = item.url || '#';
+          link.href = item.url || (Array.isArray(item.urls) && item.urls[0]) || '#';
           link.target = '_blank';
           link.rel = 'noreferrer';
 
           card.appendChild(media);
           card.appendChild(body);
-          if (item.url) card.appendChild(link);
+          if (item.url || (Array.isArray(item.urls) && item.urls.length)) card.appendChild(link);
 
           return card;
         };
@@ -223,7 +232,10 @@
 
             const imovirtual = Array.isArray(data.imovirtual) ? data.imovirtual : [];
             const supercasa = Array.isArray(data.supercasa) ? data.supercasa : [];
-            const totalCount = imovirtual.length + supercasa.length;
+            const casacerta = Array.isArray(data.casacerta) ? data.casacerta : [];
+            const casayes = Array.isArray(data.casayes) ? data.casayes : [];
+            const combined = Array.isArray(data.combined) ? data.combined : [];
+            const totalCount = combined.length;
             total.textContent = String(totalCount);
 
             content.innerHTML = '';
@@ -243,9 +255,29 @@
             }
             const sections = document.createElement('div');
             sections.className = 'estate-sections';
+            sections.appendChild(renderSection('Agregado', combined, 'estate-combined', 'dedupe'));
             sections.appendChild(renderSection('Imovirtual', imovirtual, 'estate-imovirtual', data.methods && data.methods.imovirtual));
             sections.appendChild(renderSection('Supercasa', supercasa, 'estate-supercasa', data.methods && data.methods.supercasa));
+            sections.appendChild(renderSection('Casa Certa', casacerta, 'estate-casacerta', data.methods && data.methods.casacerta));
+            sections.appendChild(renderSection('Casa Yes', casayes, 'estate-casayes', data.methods && data.methods.casayes));
             content.appendChild(sections);
+            const setView = (view) => {
+              const map = {
+                combined: 'estate-combined',
+                imovirtual: 'estate-imovirtual',
+                supercasa: 'estate-supercasa',
+                casacerta: 'estate-casacerta',
+                casayes: 'estate-casayes',
+              };
+              Object.values(map).forEach((id) => {
+                const section = document.getElementById(id);
+                if (section) section.style.display = id === map[view] ? 'block' : 'none';
+              });
+              document.querySelectorAll('.estate-tabs [data-view]').forEach((btn) => {
+                btn.classList.toggle('is-active', btn.getAttribute('data-view') === view);
+              });
+            };
+            setView('combined');
           } catch (err) {
             content.innerHTML = '<div class="estate-status error">Erro ao carregar dados.</div>';
           }
@@ -277,11 +309,19 @@
           window.scrollTo({ top: 0, behavior: 'smooth' });
         });
 
-        document.querySelectorAll('[data-jump]').forEach((btn) => {
+        document.querySelectorAll('[data-view]').forEach((btn) => {
           btn.addEventListener('click', () => {
-            const id = btn.getAttribute('data-jump');
-            const target = document.getElementById(`estate-${id}`);
-            if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            const view = btn.getAttribute('data-view');
+            const target = document.getElementById(`estate-${view}`);
+            if (target) {
+              document.querySelectorAll('.estate-section').forEach((section) => {
+                section.style.display = section === target ? 'block' : 'none';
+              });
+              document.querySelectorAll('.estate-tabs [data-view]').forEach((tab) => {
+                tab.classList.toggle('is-active', tab === btn);
+              });
+              target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
           });
         });
         load();

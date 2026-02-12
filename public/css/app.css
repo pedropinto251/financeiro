@@ -193,6 +193,11 @@ h2 { margin: 0 0 1rem; font-size: 1.05rem; font-weight: 600; }
   cursor: pointer;
 }
 
+.ghost-btn.is-active {
+  border-style: solid;
+  background: var(--panel-strong);
+}
+
 .estate-sections {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -249,6 +254,24 @@ h2 { margin: 0 0 1rem; font-size: 1.05rem; font-weight: 600; }
 .estate-section {
   display: grid;
   gap: 1rem;
+}
+
+.estate-section#estate-combined .estate-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1.25rem;
+}
+
+@media (max-width: 1200px) {
+  .estate-section#estate-combined .estate-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .estate-section#estate-combined .estate-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .estate-section h2 {

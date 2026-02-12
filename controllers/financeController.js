@@ -94,6 +94,10 @@ function normalizeMonthInput(value) {
 }
 
 const IMOVIRTUAL_BUILD_ID = 'DgbmbX0jiylTfZDI15F3j';
+let imovirtualBuildIdCache = {
+  value: IMOVIRTUAL_BUILD_ID,
+  expiresAt: 0,
+};
 const IMOVIRTUAL_BASE =
   'https://www.imovirtual.com/_next/data';
 const SUPERCASA_BASE = 'https://supercasa.pt/comprar-casas';
@@ -121,6 +125,16 @@ function getExtraHeadersFromEnv() {
     // ignore
   }
   return {};
+}
+
+function getCasayesHeadersFromEnv() {
+  const headers = {};
+  if (process.env.CASAYES_SESSIONID) headers.sessionid = process.env.CASAYES_SESSIONID;
+  if (process.env.CASAYES_TENANTID) headers.tenantid = process.env.CASAYES_TENANTID;
+  if (process.env.CASAYES_LANGUAGEID) headers.languageid = process.env.CASAYES_LANGUAGEID;
+  if (process.env.CASAYES_DEVICE) headers.device = process.env.CASAYES_DEVICE;
+  if (process.env.CASAYES_BEEDIGITAL) headers.beedigital = process.env.CASAYES_BEEDIGITAL;
+  return headers;
 }
 
 function decodeHtml(input) {
@@ -221,6 +235,192 @@ function parseSupercasa(html) {
       url,
     };
   });
+}
+
+function parseCasacerta(html) {
+  const blocks = [...String(html).matchAll(/property-ad-in-list-really[\s\S]*?>/g)];
+  if (!blocks.length) return [];
+  const blockSlices = blocks.map((match, idx) => {
+    const start = match.index || 0;
+    const nextIdx = idx + 1 < blocks.length ? (blocks[idx + 1].index || html.length) : html.length;
+    return html.slice(start, nextIdx);
+  });
+
+  return blockSlices.map((block) => {
+    const linkMatch = block.match(/href=\"(https:\/\/casacerta\.pt\/imovel\/[^\"]+)\"/);
+    const url = linkMatch ? linkMatch[1] : null;
+
+    const idMatch = block.match(/imovel\/(\d+)\//);
+    const id = idMatch ? idMatch[1] : '0';
+
+    const titleMatch = block.match(/<h5[^>]*>([\s\S]*?)<\/h5>/);
+    const title = titleMatch ? cleanText(titleMatch[1]) : 'Imovel';
+
+    const priceMatch = block.match(/class=\"responsive-text-24[^"]*\">([\s\S]*?)<\/p>/);
+    const price = priceMatch ? cleanText(priceMatch[1]) : null;
+
+    const imgMatch = block.match(/<img[^>]*class=\"d-block\"[^>]*src=\"([^\"]+)\"/);
+    const image = imgMatch ? imgMatch[1] : null;
+
+    const roomsMatch = block.match(/([\d]+)\s*Quartos/i);
+    const rooms = roomsMatch ? `${roomsMatch[1]} quartos` : null;
+
+    const areaMatch = block.match(/Área bruta\s*:\s*([\d.,]+)\s*m²/i);
+    const area = areaMatch ? `${areaMatch[1]} m²` : null;
+
+    return {
+      id,
+      source: 'casacerta',
+      title,
+      price,
+      area,
+      rooms,
+      image,
+      url,
+    };
+  });
+}
+
+async function getImovirtualBuildId(district, council, headersCommon) {
+  const now = Date.now();
+  if (imovirtualBuildIdCache.value && imovirtualBuildIdCache.expiresAt > now) {
+    return imovirtualBuildIdCache.value;
+  }
+  try {
+    const url = `https://www.imovirtual.com/pt/resultados/comprar/apartamento/${district}/${council}`;
+    const res = await fetch(url, {
+      headers: {
+        accept: 'text/html,*/*',
+        ...headersCommon,
+      },
+    });
+    if (!res.ok) return IMOVIRTUAL_BUILD_ID;
+    const html = await res.text();
+    const match = html.match(/\"buildId\":\"([^\"]+)\"/);
+    if (match && match[1]) {
+      imovirtualBuildIdCache = {
+        value: match[1],
+        expiresAt: now + 60 * 60 * 1000,
+      };
+      return match[1];
+    }
+  } catch {
+    return IMOVIRTUAL_BUILD_ID;
+  }
+  return IMOVIRTUAL_BUILD_ID;
+}
+
+function parseCasayes(payload) {
+  const items = payload && Array.isArray(payload.items) ? payload.items : [];
+  return items.map((item) => {
+    const publicId = item.publicId ? String(item.publicId) : '0';
+    const titleParts = [
+      item.listingTypeLabel ? cleanText(item.listingTypeLabel) : null,
+      item.regionName2 ? cleanText(item.regionName2) : null,
+      item.regionName3 ? cleanText(item.regionName3) : null,
+    ].filter(Boolean);
+    const title = titleParts.length ? titleParts.join(' - ') : 'Imovel';
+    const price = item.listingPrice ? `${item.listingPrice} EUR` : 'Preco sob consulta';
+    const area = item.totalArea ? `${item.totalArea} m²` : null;
+    const rooms = item.numberOfBedrooms ? `${item.numberOfBedrooms} quartos` : null;
+    const imagePath = item.defaultPictureUrl || (Array.isArray(item.listingPictures) ? item.listingPictures[0] : null);
+    let image = null;
+    if (imagePath) {
+      const raw = String(imagePath).replace(/^\//, '');
+      if (/^https?:\/\//i.test(raw)) {
+        image = raw;
+      } else if (raw.startsWith('l-view/')) {
+        image = `https://i.casayes.pt/${raw}`;
+      } else if (raw.startsWith('listings/')) {
+        image = `https://i.casayes.pt/l-view/${raw}`;
+      } else {
+        image = `https://i.casayes.pt/${raw}`;
+      }
+    }
+    const url = publicId !== '0' ? `https://casayes.pt/pt/imovel/${publicId}` : null;
+    const extras = [];
+    if (item.numberOfBathrooms) extras.push(`${item.numberOfBathrooms} WC`);
+    if (item.officePublicName) extras.push(cleanText(item.officePublicName));
+
+    return {
+      id: publicId,
+      source: 'casayes',
+      title,
+      price,
+      area,
+      rooms,
+      image,
+      url,
+      extras,
+    };
+  });
+}
+
+function normalizeTitle(value) {
+  return cleanText(String(value || ''))
+    .toLowerCase()
+    .replace(/[^a-z0-9\u00c0-\u024f\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function parsePriceNumber(value) {
+  if (!value) return null;
+  const num = String(value).replace(/[^\d]/g, '');
+  if (!num) return null;
+  return Number(num);
+}
+
+function parseAreaNumber(value) {
+  if (!value) return null;
+  const num = String(value).replace(/[^\d.,]/g, '').replace(',', '.');
+  const parsed = parseFloat(num);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function mergeEstateItems(items, meta) {
+  const bucketPrice = (price) => {
+    if (!price) return 'p0';
+    return `p${Math.round(price / 5000) * 5000}`;
+  };
+  const bucketArea = (area) => {
+    if (!area) return 'a0';
+    return `a${Math.round(area / 5) * 5}`;
+  };
+
+  const map = new Map();
+  items.forEach((item) => {
+    const titleKey = normalizeTitle(item.title);
+    const priceNum = parsePriceNumber(item.price);
+    const areaNum = parseAreaNumber(item.area);
+    const key = `${titleKey}|${bucketPrice(priceNum)}|${bucketArea(areaNum)}|${meta.district}|${meta.council}`;
+
+    if (!map.has(key)) {
+      const base = { ...item };
+      base.source = 'aggregated';
+      base.sources = item.source ? [item.source] : [];
+      base.urls = item.url ? [item.url] : [];
+      map.set(key, base);
+      return;
+    }
+
+    const current = map.get(key);
+    if (item.source && !current.sources.includes(item.source)) {
+      current.sources.push(item.source);
+    }
+    if (item.url && !current.urls.includes(item.url)) {
+      current.urls.push(item.url);
+    }
+    if (!current.image && item.image) current.image = item.image;
+    if ((!current.price || current.price === 'Preco sob consulta') && item.price && item.price !== 'Preco sob consulta') {
+      current.price = item.price;
+    }
+    if (!current.area && item.area) current.area = item.area;
+    if (!current.rooms && item.rooms) current.rooms = item.rooms;
+    if (!current.title && item.title) current.title = item.title;
+  });
+
+  return Array.from(map.values());
 }
 
 async function withGroup(req) {
@@ -520,17 +720,19 @@ async function handleRealEstateData(req, res) {
     const district = normalizeSlug(districtRaw) || 'aveiro';
     const council = normalizeSlug(councilRaw) || 'espinho';
 
-    const imovirtualUrl = `${IMOVIRTUAL_BASE}/${IMOVIRTUAL_BUILD_ID}/pt/resultados/comprar/apartamento/${district}/${council}.json?limit=36&ownerTypeSingleSelect=ALL&by=DEFAULT&direction=DESC&searchingCriteria=comprar&searchingCriteria=apartamento&searchingCriteria=${encodeURIComponent(
-      district
-    )}&searchingCriteria=${encodeURIComponent(council)}&page=${page}`;
-
-    const supercasaUrl = `${SUPERCASA_BASE}/${district}/${council}/pagina-${page}`;
-
     const headersCommon = {
       'accept-language': 'pt-PT,pt;q=0.9,en;q=0.8',
       'user-agent':
         'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
     };
+    const imovirtualBuildId = await getImovirtualBuildId(district, council, headersCommon);
+    const imovirtualUrl = `${IMOVIRTUAL_BASE}/${imovirtualBuildId}/pt/resultados/comprar/apartamento/${district}/${council}.json?limit=36&ownerTypeSingleSelect=ALL&by=DEFAULT&direction=DESC&searchingCriteria=comprar&searchingCriteria=apartamento&searchingCriteria=${encodeURIComponent(
+      district
+    )}&searchingCriteria=${encodeURIComponent(council)}&page=${page}`;
+
+    const supercasaUrl = `${SUPERCASA_BASE}/${district}/${council}/pagina-${page}`;
+    const casacertaPlacesUrl = `https://casacerta.pt/api/placesvue?locais=${encodeURIComponent(councilRaw || council)}&format=json`;
+    const casayesUrl = 'https://casayes.pt/api/frontend/frontendlisting/SearchWithPagination';
     const safeReadText = async (response, limit) => {
       try {
         const text = await response.text();
@@ -641,9 +843,13 @@ async function handleRealEstateData(req, res) {
 
     let imovirtual = [];
     let supercasa = [];
+    let casacerta = [];
+    let casayes = [];
     const methods = {
       imovirtual: 'fetch',
       supercasa: 'fetch',
+      casacerta: 'fetch',
+      casayes: 'fetch',
     };
     const warnings = [];
 
@@ -701,7 +907,207 @@ async function handleRealEstateData(req, res) {
       }
     }
 
-    return res.json({ imovirtual, supercasa, warnings, methods, page, district, council });
+    const selectCasacertaLocation = (entries) => {
+      if (!Array.isArray(entries) || !entries.length) return null;
+      const districtName = (districtRaw || district || '').toLowerCase();
+      const councilName = (councilRaw || council || '').toLowerCase();
+      const normalized = entries.map((entry) => ({
+        entry,
+        distrito: String(entry.Distrito || '').toLowerCase(),
+        concelho: String(entry.Concelho || '').toLowerCase(),
+        label: String(entry.Label || '').toLowerCase(),
+      }));
+      const exactConcelho = normalized.find(
+        (item) => item.label === 'concelho' && item.distrito === districtName && item.concelho === councilName
+      );
+      if (exactConcelho) return exactConcelho.entry;
+      const exactMatch = normalized.find(
+        (item) => item.distrito === districtName && item.concelho === councilName
+      );
+      if (exactMatch) return exactMatch.entry;
+      const anyConcelho = normalized.find((item) => item.label === 'concelho' && item.concelho === councilName);
+      return anyConcelho ? anyConcelho.entry : normalized[0].entry;
+    };
+
+    try {
+      const placesRes = await fetch(casacertaPlacesUrl, {
+        headers: { accept: 'application/json', ...headersCommon },
+      });
+      if (placesRes.ok) {
+        const places = await placesRes.json();
+        const selected = selectCasacertaLocation(places);
+        if (selected && selected.api_id) {
+          const casacertaUrl = `https://casacerta.pt/imoveis?finalidade=Venda&proptype=1%2C2%2C7&county=${encodeURIComponent(
+            selected.api_id
+          )}&useRef=useRef&pageNo=${page}`;
+          const casacertaRes = await fetch(casacertaUrl, {
+            headers: {
+              accept: '*/*',
+              ...headersCommon,
+              referer: 'https://casacerta.pt/',
+            },
+          });
+          if (casacertaRes.ok) {
+            const casacertaHtml = await casacertaRes.text();
+            casacerta = parseCasacerta(casacertaHtml);
+          } else {
+            const bodySnippet = await safeReadText(casacertaRes, 300);
+            warnings.push({
+              source: 'casacerta',
+              error: 'casacerta_unavailable',
+              status: casacertaRes.status,
+              statusText: casacertaRes.statusText,
+              bodySnippet,
+            });
+          }
+        } else {
+          warnings.push({
+            source: 'casacerta',
+            error: 'casacerta_location_not_found',
+          });
+        }
+      } else {
+        const bodySnippet = await safeReadText(placesRes, 300);
+        warnings.push({
+          source: 'casacerta',
+          error: 'casacerta_places_unavailable',
+          status: placesRes.status,
+          statusText: placesRes.statusText,
+          bodySnippet,
+        });
+      }
+    } catch (err) {
+      warnings.push({
+        source: 'casacerta',
+        error: 'casacerta_failed',
+        message: err instanceof Error ? err.message : 'unknown',
+      });
+    }
+
+    try {
+      const casayesPayload = {
+        filters: [
+          {
+            field: 'autocompletePublicId,autocompleteExternalPublicId,regionName1,regionName2,regionName3,addressZipCode',
+            operationType: 'multipleField',
+            operator: 'Contains',
+            value: councilRaw || council,
+          },
+          {
+            field: 'businessTypeId',
+            operationType: 'int',
+            operator: '=',
+            value: '1',
+          },
+          {
+            field: 'listingTypeId',
+            operationType: 'multiple',
+            operator: '=',
+            value: '1,2,10',
+          },
+        ],
+        pageNumber: page,
+        pageSize: 20,
+        sort: ['-Relevance', '-PublishingDateDay'],
+      };
+      const casayesHeaders = {
+        accept: 'application/json, text/plain, */*',
+        'content-type': 'application/json',
+        'cache-control': 'no-cache',
+        pragma: 'no-cache',
+        origin: 'https://casayes.pt',
+        referer: 'https://casayes.pt/pt/comprar/casaseapartamentos',
+        beedigital: 'casayes',
+        device: 'web',
+        languageid: '9',
+        tenantid: '7',
+        ...headersCommon,
+        ...getCasayesHeadersFromEnv(),
+      };
+      const casayesRes = await fetch(casayesUrl, {
+        method: 'POST',
+        headers: casayesHeaders,
+        body: JSON.stringify(casayesPayload),
+      });
+      if (casayesRes.ok) {
+        const casayesJson = await casayesRes.json();
+        casayes = parseCasayes(casayesJson);
+        if (!casayes.length) {
+          const fallbackPayload = {
+            filters: [
+              {
+                field: 'regionName2',
+                operationType: 'string',
+                operator: 'Contains',
+                value: councilRaw || council,
+              },
+              {
+                field: 'businessTypeId',
+                operationType: 'int',
+                operator: '=',
+                value: '1',
+              },
+              {
+                field: 'listingTypeId',
+                operationType: 'multiple',
+                operator: '=',
+                value: '1,2,10',
+              },
+            ],
+            pageNumber: page,
+            pageSize: 20,
+            sort: ['-Relevance', '-PublishingDateDay'],
+          };
+          const fallbackRes = await fetch(casayesUrl, {
+            method: 'POST',
+            headers: casayesHeaders,
+            body: JSON.stringify(fallbackPayload),
+          });
+          if (fallbackRes.ok) {
+            const fallbackJson = await fallbackRes.json();
+            casayes = parseCasayes(fallbackJson);
+            if (!casayes.length) {
+              warnings.push({
+                source: 'casayes',
+                error: 'casayes_empty',
+                payload: fallbackPayload,
+                bodySnippet: JSON.stringify(fallbackJson).slice(0, 300),
+              });
+            }
+          } else {
+            const bodySnippet = await safeReadText(fallbackRes, 300);
+            warnings.push({
+              source: 'casayes',
+              error: 'casayes_unavailable',
+              status: fallbackRes.status,
+              statusText: fallbackRes.statusText,
+              bodySnippet,
+            });
+          }
+        }
+      } else {
+        const bodySnippet = await safeReadText(casayesRes, 300);
+        warnings.push({
+          source: 'casayes',
+          error: 'casayes_unavailable',
+          status: casayesRes.status,
+          statusText: casayesRes.statusText,
+          bodySnippet,
+        });
+      }
+    } catch (err) {
+      warnings.push({
+        source: 'casayes',
+        error: 'casayes_failed',
+        message: err instanceof Error ? err.message : 'unknown',
+      });
+    }
+
+    const combined = mergeEstateItems(
+      [...imovirtual, ...supercasa, ...casacerta, ...casayes],
+      { district, council }
+    );
+    return res.json({ imovirtual, supercasa, casacerta, casayes, combined, warnings, methods, page, district, council });
   } catch (err) {
     console.error('realestate:data failed', err);
     return res.status(500).json({
