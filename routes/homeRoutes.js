@@ -40,6 +40,7 @@ const {
   handleCreateUser,
   handleUpdateUser,
   handleRealEstateData,
+  handleRealEstateLocationsBuild,
 } = require('../controllers/financeController');
 const upload = require('../config/upload');
 const wishlistUpload = require('../config/wishlistUpload');
@@ -62,6 +63,7 @@ router.get('/wishlist', ensureAuth, renderWishlist);
 router.get('/goals', ensureAuth, renderGoals);
 router.get('/realestate', ensureAuth, renderRealEstate);
 router.get('/realestate/data', ensureAuth, handleRealEstateData);
+router.post('/realestate/locations/build', ensureAuth, handleRealEstateLocationsBuild);
 router.get('/admin/users', ensureAuth, ensureAdmin, renderAdminUsers);
 
 router.post('/categories', ensureAuth, handleCreateCategory);

@@ -25,80 +25,116 @@
         <div class="error-box"><%= error %></div>
       <% } %>
 
-      <section class="card">
-        <div class="estate-summary">
-          <div>
-            <h2>Agregador</h2>
-            <p class="muted">Imoveis carregados: <span id="estate-total">0</span></p>
+      <section class="card estate-hero">
+        <div class="estate-hero-header">
+          <div class="estate-hero-title">
+            <span class="estate-hero-kicker">Agregador Imobiliario</span>
+            <h2>Pesquisa unificada e inteligente</h2>
+            <p class="muted">Cruza fontes, reduz repetidos e traz tudo num so painel.</p>
           </div>
-          <div class="estate-actions">
-            <button class="quick-btn" type="button" id="estate-refresh">
-              <i class="fa-solid fa-rotate"></i>
-              Atualizar
-            </button>
-            <button class="quick-btn" type="button" id="estate-prev">
-              <i class="fa-solid fa-chevron-left"></i>
-              Pagina anterior
-            </button>
-            <button class="quick-btn" type="button" id="estate-next">
-              <i class="fa-solid fa-chevron-right"></i>
-              Proxima pagina
-            </button>
+          <div class="estate-hero-actions">
+            <div class="estate-kpi">
+              <span class="estate-kpi-label">Imoveis</span>
+              <span class="estate-kpi-value" id="estate-total">0</span>
+            </div>
+            <div class="estate-actions">
+              <button class="quick-btn" type="button" id="estate-refresh">
+                <i class="fa-solid fa-rotate"></i>
+                Atualizar
+              </button>
+              <button class="quick-btn" type="button" id="estate-prev">
+                <i class="fa-solid fa-chevron-left"></i>
+                Pagina anterior
+              </button>
+              <button class="quick-btn" type="button" id="estate-next">
+                <i class="fa-solid fa-chevron-right"></i>
+                Proxima pagina
+              </button>
+            </div>
           </div>
         </div>
-        <div class="estate-filters">
-          <label>
-            Distrito
-            <input type="text" id="estate-district" placeholder="aveiro" value="aveiro" list="district-list" />
-          </label>
-          <label>
-            Concelho
-            <input type="text" id="estate-council" placeholder="espinho" value="espinho" list="council-list" />
-          </label>
-          <label>
-            Pagina
-            <input type="number" id="estate-page" min="1" value="1" />
-          </label>
-          <label>
-            Preco minimo
-            <input type="number" id="estate-price-min" min="0" placeholder="0" />
-          </label>
-          <label>
-            Preco maximo
-            <input type="number" id="estate-price-max" min="0" placeholder="1000000" />
-          </label>
-          <label>
-            Tipologia
-            <select id="estate-rooms">
-              <option value="">Todas</option>
-              <option value="1">T1</option>
-              <option value="2">T2</option>
-              <option value="3">T3</option>
-              <option value="4">T4+</option>
-            </select>
-          </label>
-          <label>
-            Pesquisa
-            <input type="text" id="estate-search" placeholder="ex: varanda, praia" />
-          </label>
-          <label>
-            Ordenar
-            <select id="estate-sort">
-              <option value="relevance">Relevancia</option>
-              <option value="price_asc">Preco (baixo → alto)</option>
-              <option value="price_desc">Preco (alto → baixo)</option>
-              <option value="area_asc">Area (baixo → alto)</option>
-              <option value="area_desc">Area (alto → baixo)</option>
-              <option value="rooms_desc">Tipologia (alto → baixo)</option>
-              <option value="rooms_asc">Tipologia (baixo → alto)</option>
-              <option value="date_desc">Mais recente</option>
-              <option value="date_asc">Mais antigo</option>
-              <option value="title_asc">Titulo (A → Z)</option>
-              <option value="title_desc">Titulo (Z → A)</option>
-            </select>
-          </label>
+
+        <div class="estate-filters-panel">
+          <div class="estate-filter-group">
+            <div class="estate-filter-title estate-filter-title-row">
+              <span>Localizacao</span>
+              <button class="ghost-btn" type="button" id="estate-build-locations">Atualizar lista</button>
+              <span class="estate-filter-status" id="estate-build-status"></span>
+            </div>
+            <div class="estate-filter-row">
+              <label class="estate-field">
+                <span>Distrito</span>
+                <select id="estate-district"></select>
+              </label>
+              <label class="estate-field">
+                <span>Concelho</span>
+                <select id="estate-council"></select>
+              </label>
+              <label class="estate-field">
+                <span>Pagina</span>
+                <input type="number" id="estate-page" min="1" value="1" />
+              </label>
+            </div>
+          </div>
+
+          <div class="estate-filter-group">
+            <div class="estate-filter-title">Preco</div>
+            <div class="estate-filter-row">
+              <label class="estate-field">
+                <span>Minimo</span>
+                <input type="number" id="estate-price-min" min="0" placeholder="0" />
+              </label>
+              <label class="estate-field">
+                <span>Maximo</span>
+                <input type="number" id="estate-price-max" min="0" placeholder="1000000" />
+              </label>
+            </div>
+          </div>
+
+          <div class="estate-filter-group">
+            <div class="estate-filter-title">Tipologia e Texto</div>
+            <div class="estate-filter-row">
+              <label class="estate-field">
+                <span>Tipologia</span>
+                <select id="estate-rooms">
+                  <option value="">Todas</option>
+                  <option value="1">T1</option>
+                  <option value="2">T2</option>
+                  <option value="3">T3</option>
+                  <option value="4">T4+</option>
+                </select>
+              </label>
+              <label class="estate-field estate-field-grow">
+                <span>Pesquisa</span>
+                <input type="text" id="estate-search" placeholder="ex: varanda, praia" />
+              </label>
+            </div>
+          </div>
+
+          <div class="estate-filter-group">
+            <div class="estate-filter-title">Ordenacao</div>
+            <div class="estate-filter-row">
+              <label class="estate-field estate-field-grow">
+                <span>Ordenar por</span>
+                <select id="estate-sort">
+                  <option value="relevance">Relevancia</option>
+                  <option value="price_asc">Preco (baixo → alto)</option>
+                  <option value="price_desc">Preco (alto → baixo)</option>
+                  <option value="area_asc">Area (baixo → alto)</option>
+                  <option value="area_desc">Area (alto → baixo)</option>
+                  <option value="rooms_desc">Tipologia (alto → baixo)</option>
+                  <option value="rooms_asc">Tipologia (baixo → alto)</option>
+                  <option value="date_desc">Mais recente</option>
+                  <option value="date_asc">Mais antigo</option>
+                  <option value="title_asc">Titulo (A → Z)</option>
+                  <option value="title_desc">Titulo (Z → A)</option>
+                </select>
+              </label>
+            </div>
+          </div>
         </div>
-        <div class="estate-jump estate-tabs">
+
+        <div class="estate-tabs-bar estate-tabs">
           <button class="ghost-btn is-active" type="button" data-view="combined">Agregado</button>
           <button class="ghost-btn" type="button" data-view="imovirtual">Imovirtual</button>
           <button class="ghost-btn" type="button" data-view="supercasa">Supercasa</button>
@@ -106,13 +142,10 @@
           <button class="ghost-btn" type="button" data-view="casayes">Casa Yes</button>
           <button class="ghost-btn" type="button" data-view="greenacres">Green Acres</button>
         </div>
-        <p class="muted small">
+        <p class="estate-note">
           Nota: o Imovirtual usa um buildId no URL. Se falhar, tera de atualizar o link.
         </p>
       </section>
-
-      <datalist id="district-list"></datalist>
-      <datalist id="council-list"></datalist>
 
       <section class="estate-content" id="estate-content">
         <div class="estate-status">A carregar...</div>
@@ -142,47 +175,109 @@
         const districtInput = document.getElementById('estate-district');
         const councilInput = document.getElementById('estate-council');
         const pageInput = document.getElementById('estate-page');
-        const districtList = document.getElementById('district-list');
-        const councilList = document.getElementById('council-list');
+        const buildLocationsBtn = document.getElementById('estate-build-locations');
+        const buildStatus = document.getElementById('estate-build-status');
         const priceMinInput = document.getElementById('estate-price-min');
         const priceMaxInput = document.getElementById('estate-price-max');
         const roomsInput = document.getElementById('estate-rooms');
         const searchInput = document.getElementById('estate-search');
         const sortInput = document.getElementById('estate-sort');
 
-        const districtOptions = {
-          aveiro: ['espinho', 'aveiro', 'ilhavo', 'oliveira-de-azemeis', 'santa-maria-da-feira'],
-          porto: ['porto', 'gaia', 'matosinhos', 'maia', 'valongo'],
-          lisboa: ['lisboa', 'cascais', 'oeiras', 'sintra', 'amadora'],
-          braga: ['braga', 'guimaraes', 'famalicao', 'barcelos'],
-          coimbra: ['coimbra', 'figueira-da-foz', 'montemor-o-velho'],
-          setubal: ['setubal', 'almada', 'seixal', 'barreiro'],
-          faro: ['faro', 'loule', 'portimao', 'albufeira'],
+        let locationData = {
+          districts: [
+            { name: 'Aveiro', slug: 'aveiro' },
+            { name: 'Porto', slug: 'porto' },
+            { name: 'Lisboa', slug: 'lisboa' },
+          ],
+          byDistrict: {
+            aveiro: [
+              { name: 'Aveiro', slug: 'aveiro' },
+              { name: 'Espinho', slug: 'espinho' },
+              { name: 'Ilhavo', slug: 'ilhavo' },
+            ],
+            porto: [
+              { name: 'Porto', slug: 'porto' },
+              { name: 'Vila Nova de Gaia', slug: 'vila-nova-de-gaia' },
+              { name: 'Matosinhos', slug: 'matosinhos' },
+            ],
+            lisboa: [
+              { name: 'Lisboa', slug: 'lisboa' },
+              { name: 'Cascais', slug: 'cascais' },
+              { name: 'Sintra', slug: 'sintra' },
+            ],
+          },
         };
 
-        const buildOptions = (list, items) => {
-          list.innerHTML = '';
+        const buildOptionsFromList = (select, items, selectedSlug) => {
+          select.innerHTML = '';
           items.forEach((item) => {
             const opt = document.createElement('option');
-            opt.value = item;
-            list.appendChild(opt);
+            opt.value = item.slug;
+            opt.textContent = item.name;
+            if (selectedSlug && item.slug === selectedSlug) opt.selected = true;
+            select.appendChild(opt);
           });
         };
 
-        buildOptions(districtList, Object.keys(districtOptions));
+        const syncDistrictOptions = () => {
+          const currentDistrict = slugify(districtInput.value || 'aveiro');
+          buildOptionsFromList(districtInput, locationData.districts, currentDistrict);
+          refreshCouncils();
+        };
+
+        const slugify = (value) =>
+          String(value || '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '');
 
         const refreshCouncils = () => {
-          const key = (districtInput.value || '').trim().toLowerCase();
-          const councils = districtOptions[key] || [];
-          buildOptions(councilList, councils);
-          if (councils.length && !councils.includes(councilInput.value.trim().toLowerCase())) {
-            councilInput.value = councils[0];
-          }
+          const key = slugify(districtInput.value);
+          const councils = locationData.byDistrict[key] || [];
+          const current = slugify(councilInput.value || (councils[0] && councils[0].name));
+          buildOptionsFromList(councilInput, councils, current);
         };
 
         districtInput.addEventListener('change', refreshCouncils);
         districtInput.addEventListener('blur', refreshCouncils);
-        refreshCouncils();
+        syncDistrictOptions();
+
+        const loadLocations = () =>
+          fetch('/data/portugal-locations.json')
+            .then((res) => (res.ok ? res.json() : null))
+            .then((payload) => {
+              if (!payload || !payload.districts || !payload.byDistrict) return false;
+              locationData = payload;
+              syncDistrictOptions();
+              return true;
+            })
+            .catch(() => false);
+
+        loadLocations();
+
+        buildLocationsBtn.addEventListener('click', async () => {
+          buildLocationsBtn.disabled = true;
+          buildStatus.textContent = 'A atualizar...';
+          try {
+            const res = await fetch('/realestate/locations/build', { method: 'POST' });
+            const payload = await res.json();
+            if (!res.ok || !payload.ok) {
+              buildStatus.textContent = 'Falhou ao atualizar.';
+            } else {
+              const ok = await loadLocations();
+              buildStatus.textContent = ok ? 'Lista atualizada.' : 'Atualizado mas sem dados.';
+            }
+          } catch (err) {
+            buildStatus.textContent = 'Erro ao atualizar.';
+          } finally {
+            setTimeout(() => {
+              buildStatus.textContent = '';
+              buildLocationsBtn.disabled = false;
+            }, 3000);
+          }
+        });
 
         const renderCard = (item) => {
           const card = document.createElement('article');

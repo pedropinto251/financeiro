@@ -163,11 +163,65 @@ h2 { margin: 0 0 1rem; font-size: 1.05rem; font-weight: 600; }
   font-size: 0.85rem;
 }
 
-.estate-summary {
+.estate-hero {
+  background: radial-gradient(1200px 420px at 10% 0%, rgba(56,189,248,0.18), transparent 55%),
+    radial-gradient(900px 400px at 90% 0%, rgba(129,140,248,0.2), transparent 60%),
+    var(--card);
+}
+
+.estate-hero-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.estate-hero-title h2 {
+  font-size: 1.4rem;
+  margin-bottom: 0.35rem;
+}
+
+.estate-hero-kicker {
+  display: inline-flex;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: var(--chip);
+  border: 1px solid var(--chip-border);
+  margin-bottom: 0.6rem;
+}
+
+.estate-hero-actions {
+  display: flex;
+  gap: 0.9rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.estate-kpi {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.6rem 0.9rem;
+  border-radius: 14px;
+  background: var(--card-strong);
+  border: 1px solid var(--border);
+  min-width: 120px;
+  text-align: center;
+}
+
+.estate-kpi-label {
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.estate-kpi-value {
+  font-size: 1.5rem;
+  font-weight: 700;
 }
 
 .estate-actions {
@@ -176,26 +230,33 @@ h2 { margin: 0 0 1rem; font-size: 1.05rem; font-weight: 600; }
   flex-wrap: wrap;
 }
 
-.estate-jump {
+.estate-tabs-bar {
   display: flex;
   gap: 0.6rem;
   flex-wrap: wrap;
-  margin-top: 0.75rem;
+  margin-top: 1rem;
 }
 
 .ghost-btn {
-  border: 1px dashed var(--border-strong);
-  background: transparent;
+  border: 1px solid var(--border-strong);
+  background: color-mix(in srgb, var(--card-strong) 85%, transparent);
   color: var(--text);
-  padding: 0.45rem 0.8rem;
+  padding: 0.5rem 0.9rem;
   border-radius: 999px;
   font-size: 0.85rem;
   cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ghost-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .ghost-btn.is-active {
   border-style: solid;
-  background: var(--panel-strong);
+  background: linear-gradient(135deg, rgba(56,189,248,0.2), rgba(129,140,248,0.15));
+  color: var(--text);
 }
 
 .estate-sections {
@@ -216,34 +277,92 @@ h2 { margin: 0 0 1rem; font-size: 1.05rem; font-weight: 600; }
   margin-bottom: 2.5rem;
 }
 
-.estate-filters {
+.estate-filters-panel {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.2rem;
+  padding: 1rem;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--card-strong) 85%, transparent);
+  border: 1px solid var(--border);
+}
+
+.estate-filter-group {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.estate-filter-title {
+  font-size: 0.8rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.estate-filter-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  justify-content: space-between;
+}
+
+.estate-filter-status {
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-left: auto;
+}
+
+.estate-filter-title-row .ghost-btn {
+  padding: 0.35rem 0.7rem;
+  font-size: 0.78rem;
+}
+
+.estate-filter-title-row .ghost-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.estate-filter-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 0.75rem;
-  margin-top: 0.85rem;
 }
 
-.estate-filters label {
+.estate-field {
   display: grid;
-  gap: 0.35rem;
+  gap: 0.4rem;
   font-size: 0.85rem;
   color: var(--muted);
 }
 
-.estate-filters input {
-  padding: 0.55rem 0.65rem;
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  background: var(--card);
-  color: var(--text);
+.estate-field-grow {
+  grid-column: span 2;
 }
 
-.estate-filters select {
-  padding: 0.55rem 0.65rem;
+@media (max-width: 720px) {
+  .estate-hero-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .estate-field-grow {
+    grid-column: span 1;
+  }
+}
+
+.estate-field input,
+.estate-field select {
+  padding: 0.6rem 0.7rem;
   border-radius: 12px;
   border: 1px solid var(--border);
-  background: var(--card);
-  color: var(--text);
+  background: var(--input-bg);
+  color: var(--input-text);
+}
+
+.estate-field input:focus,
+.estate-field select:focus {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  border-color: var(--accent);
 }
 
 .estate-status {
@@ -301,23 +420,33 @@ h2 { margin: 0 0 1rem; font-size: 1.05rem; font-weight: 600; }
 
 .estate-grid {
   display: grid;
-  gap: 1rem;
+  gap: 1.25rem;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
 
 .estate-card {
   display: grid;
-  gap: 0.85rem;
+  gap: 0;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: var(--shadow-soft);
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.estate-card:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
 }
 
 .estate-media {
   width: 100%;
-  height: 150px;
-  border-radius: 14px;
+  height: 180px;
   background-size: cover;
   background-position: center;
   background-color: color-mix(in srgb, var(--card-strong) 80%, transparent);
-  border: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
 }
 
 .estate-media-empty {
@@ -327,6 +456,7 @@ h2 { margin: 0 0 1rem; font-size: 1.05rem; font-weight: 600; }
 .estate-body {
   display: grid;
   gap: 0.4rem;
+  padding: 0.9rem 1rem 1rem;
 }
 
 .estate-body h3 {
@@ -355,9 +485,15 @@ h2 { margin: 0 0 1rem; font-size: 1.05rem; font-weight: 600; }
   font-size: 0.85rem;
   line-height: 1.4;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+.estate-note {
+  margin: 0.8rem 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
 }
 
 .estate-link {

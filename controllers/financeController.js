@@ -1,4 +1,5 @@
 const path = require('path');
+const fs = require('fs');
 const { ensureGroupForUser, linkUserToGroupByEmail } = require('../models/financeGroupModel');
 const {
   listCategories,
@@ -60,6 +61,7 @@ const {
   updateSimUser,
   getSimUserByEmailExceptId,
 } = require('../models/simulatorUserModel');
+const { slugify } = require('../services/realestate/utils');
 const { fetchRealEstateData } = require('../services/realestate');
 
 function formatDate(date) {
@@ -388,6 +390,97 @@ async function handleRealEstateData(req, res) {
       error: "server",
       message: err instanceof Error ? err.message : "unknown",
       cause: err && typeof err === "object" && err.cause ? String(err.cause) : undefined,
+    });
+  }
+}
+
+async function handleRealEstateLocationsBuild(req, res) {
+  const urls = [
+    'https://json.geoapi.pt/distritos/municipios',
+    'https://geoapi.pt/distritos/municipios?json=1',
+  ];
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const outputPath = path.join(__dirname, '..', 'public', 'data', 'portugal-locations.json');
+
+  const fetchJson = async (url, attempts = 2) => {
+    let lastErr = null;
+    for (let i = 0; i < attempts; i += 1) {
+      const res = await fetch(url, {
+        headers: {
+          accept: 'application/json',
+          'user-agent': 'financeiro/1.0 (locations-build)',
+        },
+      });
+      if (res.ok) return res.json();
+      const retryAfter = res.headers.get('retry-after');
+      if (res.status === 429) {
+        const waitMs = retryAfter ? Number(retryAfter) * 1000 : 1000 * (i + 1);
+        if (waitMs > 15000) {
+          lastErr = new Error(`HTTP ${res.status} for ${url}`);
+          break;
+        }
+        await sleep(waitMs);
+        lastErr = new Error(`HTTP ${res.status} for ${url}`);
+        continue;
+      }
+      lastErr = new Error(`HTTP ${res.status} for ${url}`);
+      break;
+    }
+    throw lastErr || new Error(`HTTP error for ${url}`);
+  };
+
+  try {
+    let payload = null;
+    let lastErr = null;
+    for (const url of urls) {
+      try {
+        payload = await fetchJson(url);
+        break;
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+    if (!payload) throw lastErr || new Error('no_source');
+
+    const districts = [];
+    const byDistrict = {};
+    payload.forEach((entry) => {
+      const name = entry.distrito || entry.Distrito || entry.nome || entry.name;
+      const municipios = entry.municipios || entry.concelhos || [];
+      if (!name || !Array.isArray(municipios)) return;
+      const district = { name: String(name), slug: slugify(name) };
+      districts.push(district);
+      byDistrict[district.slug] = municipios
+        .map((m) => {
+          if (typeof m === 'string') return m;
+          if (m && typeof m === 'object') {
+            return m.nome || m.name || m.municipio || m.Municipio || m.concelho || m.Concelho || '';
+          }
+          return '';
+        })
+        .filter(Boolean)
+        .map((m) => ({
+          name: String(m),
+          slug: slugify(m),
+        }));
+    });
+
+    const output = {
+      districts: districts.sort((a, b) => a.name.localeCompare(b.name, 'pt')),
+      byDistrict,
+      source: 'geoapi.pt',
+      updatedAt: new Date().toISOString(),
+    };
+
+    fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+    fs.writeFileSync(outputPath, JSON.stringify(output, null, 2));
+
+    return res.json({ ok: true, districts: output.districts.length });
+  } catch (err) {
+    return res.status(502).json({
+      ok: false,
+      error: 'locations_build_failed',
+      message: err instanceof Error ? err.message : 'unknown',
     });
   }
 }
@@ -1045,4 +1138,5 @@ module.exports = {
   handleCreateUser,
   handleUpdateUser,
   handleRealEstateData,
+  handleRealEstateLocationsBuild,
 };
