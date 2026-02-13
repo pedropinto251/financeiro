@@ -101,6 +101,7 @@ let imovirtualBuildIdCache = {
 const IMOVIRTUAL_BASE =
   'https://www.imovirtual.com/_next/data';
 const SUPERCASA_BASE = 'https://supercasa.pt/comprar-casas';
+const GREENACRES_BASE = 'https://www.green-acres.pt/casa-%C3%A0-venda';
 
 const ROOM_MAP = {
   ONE: 1,
@@ -174,6 +175,15 @@ function cleanText(input) {
   return decodeHtml(input).replace(/\s+/g, ' ').trim();
 }
 
+function slugify(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
 function parseImovirtual(payload) {
   const items = (payload && payload.pageProps && payload.pageProps.data && payload.pageProps.data.searchAds && payload.pageProps.data.searchAds.items) || [];
   return items.map((item) => {
@@ -181,6 +191,16 @@ function parseImovirtual(payload) {
     const url = slug
       ? `https://www.imovirtual.com/pt/anuncio/${slug}`
       : null;
+    const publishedAt =
+      item?.createdAt ||
+      item?.dateCreated ||
+      item?.dateCreatedUtc ||
+      item?.creationDate ||
+      item?.publishedAt ||
+      item?.publicationDate ||
+      item?.modifiedAt ||
+      item?.updatedAt ||
+      null;
     const priceValue = item && item.totalPrice && item.totalPrice.value;
     const priceCurrency = item && item.totalPrice && item.totalPrice.currency;
     const price = priceValue ? `${priceValue} ${priceCurrency || 'EUR'}` : 'Preco sob consulta';
@@ -198,6 +218,7 @@ function parseImovirtual(payload) {
       rooms,
       image,
       url,
+      publishedAt,
     };
   });
 }
@@ -291,6 +312,89 @@ function parseCasacerta(html) {
   });
 }
 
+function parseGreenAcres(html) {
+  const matches = [...String(html).matchAll(/<div[^>]*class=\"[^\"]*announce-card[^\"]*\"[^>]*data-advertid=\"([^\"]+)\"[\s\S]*?>/g)];
+  if (!matches.length) return [];
+  const blocks = matches.map((match, idx) => {
+    const start = match.index || 0;
+    const nextIdx = idx + 1 < matches.length ? (matches[idx + 1].index || html.length) : html.length;
+    return html.slice(start, nextIdx);
+  });
+
+  return blocks.map((block) => {
+    const idMatch = block.match(/data-advertid=\"([^\"]+)\"/);
+    const id = idMatch ? idMatch[1] : '0';
+
+    const titleMatch = block.match(/title=\"([^\"]+)\"/);
+    const title = titleMatch ? cleanText(titleMatch[1]) : 'Imovel';
+
+    const encodedUrl = block.match(/data-o=\"([^\"]+)\"/);
+    let url = null;
+    if (encodedUrl && encodedUrl[1]) {
+      try {
+        const decoded = Buffer.from(encodedUrl[1], 'base64').toString('utf8');
+        if (decoded.startsWith('http')) url = decoded;
+      } catch {
+        url = null;
+      }
+    }
+
+    const priceMatch =
+      block.match(/class=\"info-price\">([\s\S]*?)<\/strong>/) ||
+      block.match(/class=\"info-price\">([\s\S]*?)<\/span>/) ||
+      block.match(/data-price=\"([^\"]+)\"/);
+    const price = priceMatch ? cleanText(priceMatch[1]) : null;
+
+    const imgMatch =
+      block.match(/class=\"announce-card-img\"[^>]*src=\"([^\"]+)\"/) ||
+      block.match(/class=\"announce-card-img\"[^>]*data-lazy-src=\"([^\"]+)\"/) ||
+      block.match(/data-thumb-src=\"([^\"]+)\"/);
+    const image = imgMatch ? imgMatch[1] : null;
+
+    const locationMatch = block.match(/class=\"announce-localisation\">([\s\S]*?)<\/div>/);
+    const location = locationMatch ? cleanText(locationMatch[1]) : null;
+
+    const tagMatches = [...block.matchAll(/class=\"info-tag[^"]*\"[^>]*title=\"([^\"]*)\"[^>]*>([\s\S]*?)<\/div>/g)];
+    const tags = tagMatches.map((m) => ({
+      title: cleanText(m[1]),
+      text: cleanText(m[2]),
+    }));
+    const infoTags = [...block.matchAll(/class=\"info-tag[^"]*\">([\s\S]*?)<\/div>/g)].map((m) => cleanText(m[1]));
+    const areaTag =
+      tags.find((t) => /área/i.test(t.title)) ||
+      tags.find((t) => /m²/i.test(t.text)) ||
+      infoTags.find((text) => /m²/i.test(text)) ||
+      null;
+    const area = areaTag ? (areaTag.text || areaTag) : null;
+
+    const roomsTag =
+      tags.find((t) => /quarto/i.test(t.title)) ||
+      tags.find((t) => /quarto/i.test(t.text)) ||
+      infoTags.find((text) => /quarto/i.test(text)) ||
+      null;
+    const rooms = roomsTag ? (roomsTag.text || roomsTag) : null;
+
+    const descriptionMatch = block.match(/class=\"description-details\">([\s\S]*?)<\/div>/);
+    const description = descriptionMatch ? cleanText(descriptionMatch[1]) : null;
+
+    const extras = [];
+    if (location) extras.push(location);
+
+    return {
+      id,
+      source: 'greenacres',
+      title,
+      price,
+      area,
+      rooms,
+      image,
+      url,
+      description,
+      extras,
+    };
+  });
+}
+
 async function getImovirtualBuildId(district, council, headersCommon) {
   const now = Date.now();
   if (imovirtualBuildIdCache.value && imovirtualBuildIdCache.expiresAt > now) {
@@ -351,6 +455,7 @@ function parseCasayes(payload) {
     const extras = [];
     if (item.numberOfBathrooms) extras.push(`${item.numberOfBathrooms} WC`);
     if (item.officePublicName) extras.push(cleanText(item.officePublicName));
+    const publishedAt = item.publishingDate || item.publishingDateUtc || item.publishDate || null;
 
     return {
       id: publicId,
@@ -362,6 +467,7 @@ function parseCasayes(payload) {
       image,
       url,
       extras,
+      publishedAt,
     };
   });
 }
@@ -389,6 +495,11 @@ function parseAreaNumber(value) {
 }
 
 function mergeEstateItems(items, meta) {
+  const toTime = (value) => {
+    if (!value) return null;
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
   const bucketPrice = (price) => {
     if (!price) return 'p0';
     return `p${Math.round(price / 5000) * 5000}`;
@@ -428,6 +539,13 @@ function mergeEstateItems(items, meta) {
     if (!current.area && item.area) current.area = item.area;
     if (!current.rooms && item.rooms) current.rooms = item.rooms;
     if (!current.title && item.title) current.title = item.title;
+    if (item.publishedAt) {
+      const currentTime = toTime(current.publishedAt);
+      const nextTime = toTime(item.publishedAt);
+      if (!currentTime || (nextTime && nextTime > currentTime)) {
+        current.publishedAt = item.publishedAt;
+      }
+    }
   });
 
   return Array.from(map.values());
@@ -741,6 +859,8 @@ async function handleRealEstateData(req, res) {
     )}&searchingCriteria=${encodeURIComponent(council)}&page=${page}`;
 
     const supercasaUrl = `${SUPERCASA_BASE}/${district}/${council}/pagina-${page}`;
+    const greenacresQuery = `cn-pt-lg-pt-city_id-dp_${slugify(council)}-hab_house-on-hab_appartement-on-hab_castle-on`;
+    const greenacresUrl = `${GREENACRES_BASE}?searchQuery=${encodeURIComponent(greenacresQuery)}&p_n=${page}`;
     const casacertaPlacesUrl = `https://casacerta.pt/api/placesvue?locais=${encodeURIComponent(councilRaw || council)}&format=json`;
     const casayesUrl = 'https://casayes.pt/api/frontend/frontendlisting/SearchWithPagination';
     const safeReadText = async (response, limit) => {
@@ -940,8 +1060,63 @@ async function handleRealEstateData(req, res) {
         return { ok: false, error: err instanceof Error ? err.message : 'browserless_failed', data: null };
       }
     };
+    const fetchGreenacresWithBrowserless = async (targetUrl) => {
+      const token = process.env.BROWSERLESS_TOKEN;
+      if (!token) return { ok: false, error: 'browserless_token_missing', html: '' };
+      try {
+        const endpoint = `https://chrome.browserless.io/function?token=${token}`;
+        const code = `export default async function ({ page }) {
+  await page.setUserAgent(${JSON.stringify(headersCommon['user-agent'])});
+  await page.setViewport({ width: 1366, height: 768 });
+  await page.setExtraHTTPHeaders({
+    'accept-language': ${JSON.stringify(headersCommon['accept-language'])},
+  });
+  await page.goto(${JSON.stringify(targetUrl)}, { waitUntil: 'domcontentloaded' });
+  try {
+    await page.waitForSelector('.announce-card[data-advertid]', { timeout: 15000 });
+  } catch (err) {
+    const title = await page.title();
+    return { data: { error: 'selector_timeout', title }, type: 'application/json' };
+  }
+  const html = await page.content();
+  return { data: html, type: 'text/html' };
+}`;
+        const resp = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'content-type': 'application/javascript' },
+          body: code,
+        });
+        if (!resp.ok) {
+          const bodySnippet = await safeReadText(resp, 300);
+          return { ok: false, error: `browserless_${resp.status}`, html: '', bodySnippet };
+        }
+        const bodyText = await resp.text();
+        const contentType = resp.headers.get('content-type') || '';
+        let html = '';
+        if (contentType.includes('application/json')) {
+          try {
+            const payload = JSON.parse(bodyText);
+            if (payload && payload.type === 'text/html' && typeof payload.data === 'string') {
+              html = payload.data;
+            } else {
+              return { ok: false, error: 'browserless_empty', html: '', bodySnippet: JSON.stringify(payload).slice(0, 300) };
+            }
+          } catch {
+            return { ok: false, error: 'browserless_parse_failed', html: '', bodySnippet: bodyText.slice(0, 300) };
+          }
+        } else {
+          html = bodyText;
+        }
+        if (!/announce-card/i.test(html)) {
+          return { ok: false, error: 'browserless_empty', html, bodySnippet: html.slice(0, 300) };
+        }
+        return { ok: true, html };
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : 'browserless_failed', html: '' };
+      }
+    };
     const extraSupercasaHeaders = getExtraHeadersFromEnv();
-    const [imovirtualRes, supercasaRes] = await Promise.all([
+    const [imovirtualRes, supercasaRes, greenacresRes] = await Promise.all([
       fetch(imovirtualUrl, {
         headers: { accept: 'application/json', ...headersCommon },
       }),
@@ -954,17 +1129,26 @@ async function handleRealEstateData(req, res) {
           ...extraSupercasaHeaders,
         },
       }),
+      fetch(greenacresUrl, {
+        headers: {
+          accept: '*/*',
+          ...headersCommon,
+          referer: 'https://www.green-acres.pt/',
+        },
+      }),
     ]);
 
     let imovirtual = [];
     let supercasa = [];
     let casacerta = [];
     let casayes = [];
+    let greenacres = [];
     const methods = {
       imovirtual: 'fetch',
       supercasa: 'fetch',
       casacerta: 'fetch',
       casayes: 'fetch',
+      greenacres: 'fetch',
     };
     const warnings = [];
 
@@ -1019,6 +1203,45 @@ async function handleRealEstateData(req, res) {
           browserlessBody: bl.bodySnippet || undefined,
         });
         methods.supercasa = bl.error === 'browserless_empty' ? 'browserless_empty' : 'blocked';
+      }
+    }
+
+    if (greenacresRes.ok) {
+      const greenacresHtml = await greenacresRes.text();
+      if (/announce-card/i.test(greenacresHtml)) {
+        greenacres = parseGreenAcres(greenacresHtml);
+        methods.greenacres = 'fetch';
+      } else {
+        const bl = await fetchGreenacresWithBrowserless(greenacresUrl);
+        if (bl.ok) {
+          greenacres = parseGreenAcres(bl.html);
+          methods.greenacres = 'browserless';
+        } else {
+          warnings.push({
+            source: 'greenacres',
+            error: bl.error || 'greenacres_blocked',
+            bodySnippet: bl.bodySnippet || greenacresHtml.slice(0, 300),
+          });
+          methods.greenacres = bl.error === 'browserless_empty' ? 'browserless_empty' : 'blocked';
+        }
+      }
+    } else {
+      const bodySnippet = await safeReadText(greenacresRes, 300);
+      const bl = await fetchGreenacresWithBrowserless(greenacresUrl);
+      if (bl.ok) {
+        greenacres = parseGreenAcres(bl.html);
+        methods.greenacres = 'browserless';
+      } else {
+        warnings.push({
+          source: 'greenacres',
+          error: 'greenacres_unavailable',
+          status: greenacresRes.status,
+          statusText: greenacresRes.statusText,
+          bodySnippet,
+          browserlessError: bl.error || undefined,
+          browserlessBody: bl.bodySnippet || undefined,
+        });
+        methods.greenacres = bl.error === 'browserless_empty' ? 'browserless_empty' : 'blocked';
       }
     }
 
@@ -1448,10 +1671,22 @@ async function handleRealEstateData(req, res) {
     }
 
     const combined = mergeEstateItems(
-      [...imovirtual, ...supercasa, ...casacerta, ...casayes],
+      [...imovirtual, ...supercasa, ...casacerta, ...casayes, ...greenacres],
       { district, council }
     );
-    return res.json({ imovirtual, supercasa, casacerta, casayes, combined, warnings, methods, page, district, council });
+    return res.json({
+      imovirtual,
+      supercasa,
+      casacerta,
+      casayes,
+      greenacres,
+      combined,
+      warnings,
+      methods,
+      page,
+      district,
+      council,
+    });
   } catch (err) {
     console.error('realestate:data failed', err);
     return res.status(500).json({

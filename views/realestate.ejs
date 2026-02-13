@@ -91,6 +91,8 @@
               <option value="area_desc">Area (alto → baixo)</option>
               <option value="rooms_desc">Tipologia (alto → baixo)</option>
               <option value="rooms_asc">Tipologia (baixo → alto)</option>
+              <option value="date_desc">Mais recente</option>
+              <option value="date_asc">Mais antigo</option>
               <option value="title_asc">Titulo (A → Z)</option>
               <option value="title_desc">Titulo (Z → A)</option>
             </select>
@@ -102,6 +104,7 @@
           <button class="ghost-btn" type="button" data-view="supercasa">Supercasa</button>
           <button class="ghost-btn" type="button" data-view="casacerta">Casa Certa</button>
           <button class="ghost-btn" type="button" data-view="casayes">Casa Yes</button>
+          <button class="ghost-btn" type="button" data-view="greenacres">Green Acres</button>
         </div>
         <p class="muted small">
           Nota: o Imovirtual usa um buildId no URL. Se falhar, tera de atualizar o link.
@@ -287,6 +290,12 @@
           return Number(num);
         };
 
+        const parsePublishedAt = (value) => {
+          if (!value) return null;
+          const ts = Date.parse(value);
+          return Number.isFinite(ts) ? ts : null;
+        };
+
         const applySort = (items) => {
           const mode = sortInput.value || 'relevance';
           const list = [...items];
@@ -309,6 +318,10 @@
               return list.sort((a, b) => (parseRooms(a.rooms) ?? Infinity) - (parseRooms(b.rooms) ?? Infinity));
             case 'rooms_desc':
               return list.sort((a, b) => (parseRooms(b.rooms) ?? -Infinity) - (parseRooms(a.rooms) ?? -Infinity));
+            case 'date_desc':
+              return list.sort((a, b) => (parsePublishedAt(b.publishedAt) ?? -Infinity) - (parsePublishedAt(a.publishedAt) ?? -Infinity));
+            case 'date_asc':
+              return list.sort((a, b) => (parsePublishedAt(a.publishedAt) ?? Infinity) - (parsePublishedAt(b.publishedAt) ?? Infinity));
             case 'title_asc':
               return list.sort((a, b) => compareText(a, b, 'title', 'asc'));
             case 'title_desc':
@@ -353,6 +366,7 @@
           const supercasa = applySort(applyFilters(Array.isArray(data.supercasa) ? data.supercasa : []));
           const casacerta = applySort(applyFilters(Array.isArray(data.casacerta) ? data.casacerta : []));
           const casayes = applySort(applyFilters(Array.isArray(data.casayes) ? data.casayes : []));
+          const greenacres = applySort(applyFilters(Array.isArray(data.greenacres) ? data.greenacres : []));
           const combined = applySort(applyFilters(Array.isArray(data.combined) ? data.combined : []));
           const totalCount = combined.length;
           total.textContent = String(totalCount);
@@ -379,6 +393,7 @@
           sections.appendChild(renderSection('Supercasa', supercasa, 'estate-supercasa', data.methods && data.methods.supercasa));
           sections.appendChild(renderSection('Casa Certa', casacerta, 'estate-casacerta', data.methods && data.methods.casacerta));
           sections.appendChild(renderSection('Casa Yes', casayes, 'estate-casayes', data.methods && data.methods.casayes));
+          sections.appendChild(renderSection('Green Acres', greenacres, 'estate-greenacres', data.methods && data.methods.greenacres));
           content.appendChild(sections);
           const setView = (view) => {
             currentView = view || currentView || 'combined';
@@ -388,6 +403,7 @@
               supercasa: 'estate-supercasa',
               casacerta: 'estate-casacerta',
               casayes: 'estate-casayes',
+              greenacres: 'estate-greenacres',
             };
             Object.values(map).forEach((id) => {
               const section = document.getElementById(id);
