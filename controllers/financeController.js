@@ -24,6 +24,7 @@ const {
   voidTransaction,
   deleteTransaction,
 } = require('../models/financeTransactionModel');
+const { normalizeUploadedDocument } = require('../services/documentUpload');
 const {
   listGoals,
   createGoal,
@@ -633,14 +634,15 @@ async function handleCreateTransaction(req, res, next) {
     });
 
     if (req.file) {
+      const docMeta = await normalizeUploadedDocument(req.file);
       await createDocument({
         groupId,
         transactionId,
         userId: req.user.id,
-        originalName: req.file.originalname,
-        filePath: req.file.filename,
-        mimeType: req.file.mimetype,
-        fileSize: req.file.size,
+        originalName: docMeta.originalName,
+        filePath: docMeta.filePath,
+        mimeType: docMeta.mimeType,
+        fileSize: docMeta.fileSize,
       });
     }
 
@@ -1027,14 +1029,15 @@ async function handleUpdateTransaction(req, res, next) {
         require('fs').promises.unlink(filePath).catch(() => {});
       }
       await deleteDocumentsByTransaction(groupId, Number(id));
+      const docMeta = await normalizeUploadedDocument(req.file);
       await createDocument({
         groupId,
         transactionId: Number(id),
         userId: req.user.id,
-        originalName: req.file.originalname,
-        filePath: req.file.filename,
-        mimeType: req.file.mimetype,
-        fileSize: req.file.size,
+        originalName: docMeta.originalName,
+        filePath: docMeta.filePath,
+        mimeType: docMeta.mimeType,
+        fileSize: docMeta.fileSize,
       });
     }
     return res.redirect('/transactions?notice=updated');

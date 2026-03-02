@@ -39,7 +39,9 @@ const {
   createDocument,
   getDocumentById,
   deleteDocumentsByTransaction,
+  listDocumentsByTransaction,
 } = require('../models/financeDocumentModel');
+const { normalizeUploadedDocument } = require('../services/documentUpload');
 const { clampCycleDay, getCyclePeriod } = require('../services/financePeriod');
 
 function formatDate(date) {
@@ -253,15 +255,21 @@ router.post('/transactions/:id/document', apiAuth, upload.single('documento'), a
     const id = Number(req.params.id);
     if (!id) return res.status(400).json({ error: 'missing' });
     if (!req.file) return res.status(400).json({ error: 'missing_file' });
+    const existingDocs = await listDocumentsByTransaction(groupId, id);
+    for (const doc of existingDocs) {
+      const filePath = path.join(__dirname, '..', 'private_uploads', doc.file_path);
+      require('fs').promises.unlink(filePath).catch(() => {});
+    }
     await deleteDocumentsByTransaction(groupId, id);
+    const docMeta = await normalizeUploadedDocument(req.file);
     const docId = await createDocument({
       groupId,
       transactionId: id,
       userId: req.user.id,
-      originalName: req.file.originalname,
-      filePath: req.file.filename,
-      mimeType: req.file.mimetype,
-      fileSize: req.file.size,
+      originalName: docMeta.originalName,
+      filePath: docMeta.filePath,
+      mimeType: docMeta.mimeType,
+      fileSize: docMeta.fileSize,
     });
     return res.status(201).json({ id: docId });
   } catch (err) {
