@@ -1,5 +1,6 @@
 const path = require('path');
 const fs = require('fs');
+const ExcelJS = require('exceljs');
 const { ensureGroupForUser, linkUserToGroupByEmail } = require('../models/financeGroupModel');
 const {
   listCategories,
@@ -18,6 +19,7 @@ const {
   getYearSummary,
   getTotalSummary,
   getExpenseByCategory,
+  listTransactionsForReport,
   updateTransaction,
   voidTransaction,
   deleteTransaction,
@@ -63,7 +65,7 @@ const {
 } = require('../models/simulatorUserModel');
 const { slugify } = require('../services/realestate/utils');
 const { fetchRealEstateData } = require('../services/realestate');
-const { clampCycleDay, getCyclePeriod } = require('../services/financePeriod');
+const { clampCycleDay, getCyclePeriod, getCyclePeriodForMonth } = require('../services/financePeriod');
 
 function formatDate(date) {
   const y = date.getFullYear();
@@ -96,6 +98,20 @@ function normalizeMonthInput(value) {
   if (/^\d{4}-\d{2}$/.test(value)) return `${value}-01`;
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value.slice(0, 10);
   return null;
+}
+
+function parseMonthValue(value) {
+  if (!value || !/^\d{4}-\d{2}$/.test(value)) return null;
+  const [y, m] = value.split('-').map(Number);
+  if (!Number.isInteger(y) || !Number.isInteger(m) || m < 1 || m > 12) return null;
+  return { year: y, monthIndex: m - 1 };
+}
+
+function parseYearValue(value) {
+  const year = Number(value);
+  if (!Number.isInteger(year)) return null;
+  if (year < 2000 || year > 2100) return null;
+  return year;
 }
 
 async function withGroup(req) {
@@ -1003,6 +1019,24 @@ async function handleUpdateTransaction(req, res, next) {
       occurredOn: date,
       description: description ? description.trim() : null,
     });
+
+    if (req.file) {
+      const docs = await listDocumentsByTransaction(groupId, Number(id));
+      for (const doc of docs) {
+        const filePath = path.join(__dirname, '..', 'private_uploads', doc.file_path);
+        require('fs').promises.unlink(filePath).catch(() => {});
+      }
+      await deleteDocumentsByTransaction(groupId, Number(id));
+      await createDocument({
+        groupId,
+        transactionId: Number(id),
+        userId: req.user.id,
+        originalName: req.file.originalname,
+        filePath: req.file.filename,
+        mimeType: req.file.mimetype,
+        fileSize: req.file.size,
+      });
+    }
     return res.redirect('/transactions?notice=updated');
   } catch (err) {
     return next(err);
@@ -1104,6 +1138,102 @@ async function handleDownloadDocument(req, res, next) {
   }
 }
 
+async function handleExportReport(req, res, next) {
+  try {
+    const groupId = await withGroup(req);
+    const now = new Date();
+    const period = req.query.period === 'year' ? 'year' : 'month';
+    const { cycleDay, adjustWeekend } = getUserCycleSettings(req.user);
+
+    let start = null;
+    let end = null;
+    let label = '';
+    let filenameTag = '';
+
+    if (period === 'year') {
+      const year = parseYearValue(req.query.year) || now.getFullYear();
+      start = new Date(year, 0, 1);
+      end = new Date(year, 11, 31);
+      label = `Ano ${year}`;
+      filenameTag = `ano-${year}`;
+    } else {
+      const monthValue = parseMonthValue(req.query.month);
+      if (monthValue) {
+        const cycle = getCyclePeriodForMonth(monthValue.year, monthValue.monthIndex, cycleDay, adjustWeekend);
+        start = cycle.start;
+        end = cycle.end;
+        const mm = String(monthValue.monthIndex + 1).padStart(2, '0');
+        label = `Mes ${monthValue.year}-${mm}`;
+        filenameTag = `mes-${monthValue.year}-${mm}`;
+      } else {
+        const cycle = getCyclePeriod(now, cycleDay, adjustWeekend);
+        start = cycle.start;
+        end = cycle.end;
+        const mm = String(cycle.cycleMonth + 1).padStart(2, '0');
+        label = `Mes ${cycle.cycleYear}-${mm}`;
+        filenameTag = `mes-${cycle.cycleYear}-${mm}`;
+      }
+    }
+
+    const fromDate = formatDate(start);
+    const toDate = formatDate(end);
+
+    const [expenses, byCategory] = await Promise.all([
+      listTransactionsForReport({ groupId, fromDate, toDate, type: 'expense' }),
+      getExpenseByCategory(groupId, fromDate, toDate),
+    ]);
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'Financeiro';
+    workbook.created = new Date();
+
+    const summarySheet = workbook.addWorksheet('Resumo');
+    summarySheet.columns = [
+      { header: 'Campo', key: 'campo', width: 28 },
+      { header: 'Valor', key: 'valor', width: 40 },
+    ];
+    summarySheet.addRow({ campo: 'Periodo', valor: label });
+    summarySheet.addRow({ campo: 'Data inicio', valor: formatDate(start) });
+    summarySheet.addRow({ campo: 'Data fim', valor: formatDate(end) });
+    summarySheet.addRow({});
+    summarySheet.addRow({ campo: 'Total gasto', valor: Number(byCategory.reduce((sum, row) => sum + Number(row.total || 0), 0)).toFixed(2) });
+    summarySheet.addRow({});
+    summarySheet.addRow({ campo: 'Gastos por categoria', valor: '' });
+    summarySheet.addRow({ campo: 'Categoria', valor: 'Total' });
+    byCategory.forEach((row) => {
+      summarySheet.addRow({ campo: row.nome, valor: Number(row.total || 0) });
+    });
+
+    const txSheet = workbook.addWorksheet('Movimentos');
+    txSheet.columns = [
+      { header: 'Data', key: 'data', width: 14 },
+      { header: 'Categoria', key: 'categoria', width: 26 },
+      { header: 'Descricao', key: 'descricao', width: 40 },
+      { header: 'Fonte', key: 'fonte', width: 24 },
+      { header: 'Valor', key: 'valor', width: 14 },
+    ];
+    expenses.forEach((row) => {
+      txSheet.addRow({
+        data: row.data_ocorrencia ? new Date(row.data_ocorrencia) : null,
+        categoria: row.categoria_nome || 'Sem categoria',
+        descricao: row.descricao || '',
+        fonte: row.fonte || '',
+        valor: Number(row.valor || 0),
+      });
+    });
+    txSheet.getColumn('data').numFmt = 'yyyy-mm-dd';
+    txSheet.getColumn('valor').numFmt = '#,##0.00';
+
+    const filename = `relatorio-${filenameTag}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    await workbook.xlsx.write(res);
+    return res.end();
+  } catch (err) {
+    return next(err);
+  }
+}
+
 module.exports = {
   renderDashboard,
   renderTransactions,
@@ -1145,4 +1275,5 @@ module.exports = {
   handleUpdateUser,
   handleRealEstateData,
   handleRealEstateLocationsBuild,
+  handleExportReport,
 };

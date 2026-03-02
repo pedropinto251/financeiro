@@ -28,6 +28,19 @@ function getCycleStartForMonth(year, monthIndex, cycleDay, adjustWeekend) {
   return start;
 }
 
+function getCyclePeriodForMonth(year, monthIndex, cycleDay, adjustWeekend) {
+  const start = getCycleStartForMonth(year, monthIndex, cycleDay, adjustWeekend);
+  const nextBase = new Date(year, monthIndex + 1, 1);
+  const nextStart = getCycleStartForMonth(
+    nextBase.getFullYear(),
+    nextBase.getMonth(),
+    cycleDay,
+    adjustWeekend
+  );
+  const end = new Date(nextStart.getFullYear(), nextStart.getMonth(), nextStart.getDate() - 1);
+  return { start, end, cycleYear: year, cycleMonth: monthIndex, nextStart };
+}
+
 function getCyclePeriod(referenceDate, cycleDay, adjustWeekend) {
   const ref = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate());
   const year = ref.getFullYear();
@@ -60,4 +73,5 @@ function getCyclePeriod(referenceDate, cycleDay, adjustWeekend) {
 module.exports = {
   clampCycleDay,
   getCyclePeriod,
+  getCyclePeriodForMonth,
 };

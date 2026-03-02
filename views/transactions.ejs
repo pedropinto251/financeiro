@@ -68,6 +68,24 @@
 
         <div class="card">
           <h2>Movimentos</h2>
+          <div class="grid two" style="margin-bottom: 0.75rem;">
+            <form method="GET" action="/reports/export" class="inline-form">
+              <input type="hidden" name="period" value="month" />
+              <label class="field">
+                <span>Exportar mes</span>
+                <input id="export-month" name="month" type="month" required />
+              </label>
+              <button type="submit" class="secondary">Excel</button>
+            </form>
+            <form method="GET" action="/reports/export" class="inline-form">
+              <input type="hidden" name="period" value="year" />
+              <label class="field">
+                <span>Exportar ano</span>
+                <input id="export-year" name="year" type="number" min="2000" max="2100" required />
+              </label>
+              <button type="submit" class="secondary">Excel</button>
+            </form>
+          </div>
           <div class="grid two tx-filters" style="margin-bottom: 0.5rem;">
             <label class="field">
               <span>Categoria</span>
@@ -186,7 +204,7 @@
           <h2>Editar movimento</h2>
           <button class="modal-close" type="button" id="close-edit">Fechar</button>
         </div>
-        <form method="POST" action="/transactions/update" class="stack" id="tx-edit-form">
+        <form method="POST" action="/transactions/update" enctype="multipart/form-data" class="stack" id="tx-edit-form">
           <input type="hidden" name="id" id="edit-id" />
           <label class="field">
             <span>Tipo</span>
@@ -217,6 +235,10 @@
               <% }) %>
             </select>
           </label>
+          <label class="field">
+            <span>Documento</span>
+            <input name="documento" type="file" />
+          </label>
           <button type="submit">Guardar</button>
         </form>
       </div>
@@ -228,9 +250,13 @@
       const yyyy = today.getFullYear();
       const mm = String(today.getMonth() + 1).padStart(2, '0');
       const dd = String(today.getDate()).padStart(2, '0');
+      const exportMonth = document.getElementById('export-month');
+      const exportYear = document.getElementById('export-year');
       dateInputs.forEach((input) => {
         if (input) input.value = `${yyyy}-${mm}-${dd}`;
       });
+      if (exportMonth) exportMonth.value = `${yyyy}-${mm}`;
+      if (exportYear) exportYear.value = String(yyyy);
 
       const dateFormatter = new Intl.DateTimeFormat('pt-PT', {
         day: '2-digit',

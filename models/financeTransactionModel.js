@@ -151,6 +151,33 @@ async function getMonthlySeries(groupId, fromDate, toDate) {
   return rows;
 }
 
+async function listTransactionsForReport({ groupId, fromDate, toDate, type }) {
+  const params = [groupId];
+  let where = 't.finance_group_id = ? AND t.status = \'active\'';
+  if (type) {
+    where += ' AND t.tipo = ?';
+    params.push(type);
+  }
+  if (fromDate) {
+    where += ' AND t.data_ocorrencia >= ?';
+    params.push(fromDate);
+  }
+  if (toDate) {
+    where += ' AND t.data_ocorrencia <= ?';
+    params.push(toDate);
+  }
+  const [rows] = await pool.query(
+    `SELECT t.id, t.tipo, t.valor, t.data_ocorrencia, t.descricao, t.fonte,
+        c.nome AS categoria_nome
+     FROM finance_transactions t
+     LEFT JOIN finance_categories c ON c.id = t.categoria_id
+     WHERE ${where}
+     ORDER BY t.data_ocorrencia DESC, t.id DESC`,
+    params
+  );
+  return rows;
+}
+
 async function getTransactionById(groupId, id) {
   const [rows] = await pool.query(
     `SELECT id, tipo, valor, data_ocorrencia, descricao, categoria_id
@@ -194,6 +221,7 @@ module.exports = {
   getTotalSummary,
   getExpenseByCategory,
   getMonthlySeries,
+  listTransactionsForReport,
   getTransactionById,
   updateTransaction,
   voidTransaction,

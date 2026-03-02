@@ -41,6 +41,7 @@ const {
   handleUpdateUser,
   handleRealEstateData,
   handleRealEstateLocationsBuild,
+  handleExportReport,
 } = require('../controllers/financeController');
 const upload = require('../config/upload');
 const wishlistUpload = require('../config/wishlistUpload');
@@ -80,7 +81,7 @@ router.post('/wishlist/project', ensureAuth, handleCreateWishlistProject);
 router.post('/wishlist/list', ensureAuth, handleCreateWishlistList);
 router.post('/wishlist/share', ensureAuth, handleCreateWishlistShare);
 router.get('/wishlist/image/:id', ensureAuth, handleWishlistImage);
-router.post('/transactions/update', ensureAuth, handleUpdateTransaction);
+router.post('/transactions/update', ensureAuth, upload.single('documento'), handleUpdateTransaction);
 router.post('/transactions/void', ensureAuth, handleVoidTransaction);
 router.post('/transactions/delete', ensureAuth, handleDeleteTransaction);
 router.post('/wishlist/update', ensureAuth, handleUpdateWishlistItem);
@@ -95,5 +96,6 @@ router.post('/goals/allocate/delete', ensureAuth, handleDeleteAllocation);
 router.post('/admin/users', ensureAuth, ensureAdmin, handleCreateUser);
 router.post('/admin/users/update', ensureAuth, ensureAdmin, handleUpdateUser);
 router.get('/documents/:id', ensureAuth, handleDownloadDocument);
+router.get('/reports/export', ensureAuth, handleExportReport);
 
 module.exports = router;
