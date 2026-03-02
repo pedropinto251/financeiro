@@ -48,6 +48,14 @@
                 <option value="admin">Admin</option>
               </select>
             </label>
+            <label class="field">
+              <span>Dia de fecho mensal</span>
+              <input name="cycle_day" type="number" min="1" max="31" value="1" required />
+            </label>
+            <label class="field checkbox">
+              <input name="cycle_next_business_day" type="checkbox" value="1" checked />
+              <span>Se cair em fim de semana, passa para o proximo dia util</span>
+            </label>
             <button type="submit">Criar</button>
           </form>
         </div>
@@ -64,6 +72,7 @@
                     <strong><%= u.nome %></strong>
                     <div class="tx-desc"><%= u.email %></div>
                     <div class="tx-desc">Role: <%= u.role %></div>
+                    <div class="tx-desc">Ciclo: dia <%= u.ciclo_dia || 1 %> (<%= u.ciclo_proximo_util ? 'prox. dia util' : 'fixo' %>)</div>
                     <% if (u.ativo === 0) { %>
                       <div class="tx-desc">Inativo</div>
                     <% } %>
@@ -77,6 +86,8 @@
                       data-email="<%= u.email %>"
                       data-role="<%= u.role %>"
                       data-active="<%= u.ativo %>"
+                      data-cycle-day="<%= u.ciclo_dia || 1 %>"
+                      data-cycle-next-business="<%= u.ciclo_proximo_util ? 1 : 0 %>"
                     >
                       Editar
                     </button>
@@ -119,6 +130,14 @@
               <option value="0">Inativo</option>
             </select>
           </label>
+          <label class="field">
+            <span>Dia de fecho mensal</span>
+            <input name="cycle_day" id="user-edit-cycle-day" type="number" min="1" max="31" required />
+          </label>
+          <label class="field checkbox">
+            <input name="cycle_next_business_day" id="user-edit-cycle-next-business" type="checkbox" value="1" />
+            <span>Se cair em fim de semana, passa para o proximo dia util</span>
+          </label>
           <button type="submit">Guardar</button>
         </form>
       </div>
@@ -131,6 +150,8 @@
       const userEditEmail = document.getElementById('user-edit-email');
       const userEditRole = document.getElementById('user-edit-role');
       const userEditActive = document.getElementById('user-edit-active');
+      const userEditCycleDay = document.getElementById('user-edit-cycle-day');
+      const userEditCycleNextBusiness = document.getElementById('user-edit-cycle-next-business');
 
       const openModal = (modal) => modal && modal.classList.add('open');
       const closeModal = (modal) => modal && modal.classList.remove('open');
@@ -142,6 +163,8 @@
           if (userEditEmail) userEditEmail.value = btn.dataset.email || '';
           if (userEditRole) userEditRole.value = btn.dataset.role || 'user';
           if (userEditActive) userEditActive.value = btn.dataset.active || '1';
+          if (userEditCycleDay) userEditCycleDay.value = btn.dataset.cycleDay || '1';
+          if (userEditCycleNextBusiness) userEditCycleNextBusiness.checked = btn.dataset.cycleNextBusiness === '1';
           openModal(userEditModal);
         });
       });

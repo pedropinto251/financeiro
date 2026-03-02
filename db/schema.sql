@@ -12,6 +12,8 @@ CREATE TABLE IF NOT EXISTS simulador_utilizadores (
 	role ENUM('admin','user') NOT NULL DEFAULT 'user',
 	ativo TINYINT(1) NOT NULL DEFAULT 1,
 	finance_group_id INT NULL,
+	ciclo_dia INT NOT NULL DEFAULT 1,
+	ciclo_proximo_util TINYINT(1) NOT NULL DEFAULT 0,
 	data_criado TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 	CONSTRAINT fk_user_finance_group FOREIGN KEY (finance_group_id)
 		REFERENCES finance_groups(id) ON DELETE SET NULL

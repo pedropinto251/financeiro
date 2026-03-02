@@ -34,6 +34,8 @@ async function handleLogin(req, res, next) {
       nome: user.nome,
       role: user.role,
       finance_group_id: groupId,
+      cycle_day: user.ciclo_dia,
+      cycle_next_business_day: user.ciclo_proximo_util,
     };
     const redirect = req.query.redirect ? decodeURIComponent(req.query.redirect) : '/dashboard';
     return res.redirect(redirect);

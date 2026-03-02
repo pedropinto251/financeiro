@@ -12,7 +12,12 @@ async function apiAuth(req, res, next) {
     const user = await getSimUserById(payload.sub);
     if (!user || user.ativo === 0) return res.status(401).json({ error: 'invalid_user' });
     const groupId = await ensureGroupForUser(user);
-    req.user = { ...user, finance_group_id: groupId };
+    req.user = {
+      ...user,
+      finance_group_id: groupId,
+      cycle_day: user.ciclo_dia,
+      cycle_next_business_day: user.ciclo_proximo_util,
+    };
     return next();
   } catch (err) {
     return res.status(401).json({ error: 'invalid_token' });

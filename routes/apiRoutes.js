@@ -40,6 +40,7 @@ const {
   getDocumentById,
   deleteDocumentsByTransaction,
 } = require('../models/financeDocumentModel');
+const { clampCycleDay, getCyclePeriod } = require('../services/financePeriod');
 
 function formatDate(date) {
   const y = date.getFullYear();
@@ -48,12 +49,13 @@ function formatDate(date) {
   return `${y}-${m}-${d}`;
 }
 
-function monthStart(date) {
-  return new Date(date.getFullYear(), date.getMonth(), 1);
-}
-
-function monthEnd(date) {
-  return new Date(date.getFullYear(), date.getMonth() + 1, 0);
+function getUserCycleSettings(user) {
+  const cycleDay = clampCycleDay(
+    user?.cycle_day ?? user?.ciclo_dia ?? 1
+  );
+  const adjustWeekendRaw = user?.cycle_next_business_day ?? user?.ciclo_proximo_util;
+  const adjustWeekend = adjustWeekendRaw === true || adjustWeekendRaw === 1 || adjustWeekendRaw === '1';
+  return { cycleDay, adjustWeekend };
 }
 
 const router = express.Router();
@@ -82,6 +84,8 @@ router.post('/login', async (req, res) => {
         email: user.email,
         role: user.role,
         finance_group_id: groupId,
+        cycle_day: user.ciclo_dia,
+        cycle_next_business_day: user.ciclo_proximo_util,
       },
     });
   } catch (err) {
@@ -331,8 +335,8 @@ router.get('/dashboard', apiAuth, async (req, res) => {
   try {
     const groupId = req.user.finance_group_id;
     const now = new Date();
-    const start = monthStart(now);
-    const end = monthEnd(now);
+    const { cycleDay, adjustWeekend } = getUserCycleSettings(req.user);
+    const { start, end } = getCyclePeriod(now, cycleDay, adjustWeekend);
     const yearStartDate = new Date(now.getFullYear(), 0, 1);
     const yearEndDate = new Date(now.getFullYear(), 11, 31);
 

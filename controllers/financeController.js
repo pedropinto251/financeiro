@@ -63,6 +63,7 @@ const {
 } = require('../models/simulatorUserModel');
 const { slugify } = require('../services/realestate/utils');
 const { fetchRealEstateData } = require('../services/realestate');
+const { clampCycleDay, getCyclePeriod } = require('../services/financePeriod');
 
 function formatDate(date) {
   const y = date.getFullYear();
@@ -81,12 +82,13 @@ function formatDateDisplay(value) {
   return `${d}/${m}/${y}`;
 }
 
-function monthStart(date) {
-  return new Date(date.getFullYear(), date.getMonth(), 1);
-}
-
-function monthEnd(date) {
-  return new Date(date.getFullYear(), date.getMonth() + 1, 0);
+function getUserCycleSettings(user) {
+  const cycleDay = clampCycleDay(
+    user?.cycle_day ?? user?.ciclo_dia ?? 1
+  );
+  const adjustWeekendRaw = user?.cycle_next_business_day ?? user?.ciclo_proximo_util;
+  const adjustWeekend = adjustWeekendRaw === true || adjustWeekendRaw === 1 || adjustWeekendRaw === '1' || adjustWeekendRaw === 'on';
+  return { cycleDay, adjustWeekend };
 }
 
 function normalizeMonthInput(value) {
@@ -155,8 +157,8 @@ async function renderDashboard(req, res, next) {
     const groupId = await withGroup(req);
     await ensureDefaultCategories(groupId);
     const now = new Date();
-    const start = monthStart(now);
-    const end = monthEnd(now);
+    const { cycleDay, adjustWeekend } = getUserCycleSettings(req.user);
+    const { start, end } = getCyclePeriod(now, cycleDay, adjustWeekend);
 
     const yearStartDate = new Date(now.getFullYear(), 0, 1);
     const yearEndDate = new Date(now.getFullYear(), 11, 31);
@@ -876,7 +878,7 @@ async function handleAddAllocation(req, res, next) {
 
 async function handleCreateUser(req, res, next) {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role, cycle_day, cycle_next_business_day } = req.body;
     if (!name || !email || !password) return res.redirect('/admin/users?error=missing-user');
     const existing = await getSimUserByEmail(email.trim().toLowerCase());
     if (existing) return res.redirect('/admin/users?error=user-exists');
@@ -886,6 +888,8 @@ async function handleCreateUser(req, res, next) {
       email: email.trim().toLowerCase(),
       password: String(password),
       role: role === 'admin' ? 'admin' : 'user',
+      cycleDay: clampCycleDay(cycle_day),
+      cycleNextBusinessDay: cycle_next_business_day === '1' || cycle_next_business_day === 'on',
     });
     return res.redirect('/admin/users?notice=user');
   } catch (err) {
@@ -895,7 +899,7 @@ async function handleCreateUser(req, res, next) {
 
 async function handleUpdateUser(req, res, next) {
   try {
-    const { user_id, name, email, role, active } = req.body;
+    const { user_id, name, email, role, active, cycle_day, cycle_next_business_day } = req.body;
     if (!user_id || !name || !email) return res.redirect('/admin/users?error=missing-user-edit');
     const existing = await getSimUserByEmailExceptId(email.trim().toLowerCase(), Number(user_id));
     if (existing) return res.redirect('/admin/users?error=user-exists');
@@ -906,6 +910,8 @@ async function handleUpdateUser(req, res, next) {
       email: email.trim().toLowerCase(),
       role: role === 'admin' ? 'admin' : 'user',
       active: active === '1' || active === 'on',
+      cycleDay: clampCycleDay(cycle_day),
+      cycleNextBusinessDay: cycle_next_business_day === '1' || cycle_next_business_day === 'on',
     });
     return res.redirect('/admin/users?notice=updated');
   } catch (err) {
