@@ -43,6 +43,7 @@ const {
 } = require('../models/financeDocumentModel');
 const { normalizeUploadedDocument } = require('../services/documentUpload');
 const { clampCycleDay, getCyclePeriod } = require('../services/financePeriod');
+const { handleYeastarCallReport } = require('../controllers/yeastarController');
 
 function formatDate(date) {
   const y = date.getFullYear();
@@ -61,6 +62,10 @@ function getUserCycleSettings(user) {
 }
 
 const router = express.Router();
+
+// Endpoint publico para relatorio de chamadas Yeastar (sem auth)
+router.post('/yeastar/call-report', handleYeastarCallReport);
+router.get('/yeastar/call-report', handleYeastarCallReport);
 
 router.post('/login', async (req, res) => {
   try {

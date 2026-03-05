@@ -191,3 +191,11 @@ CREATE TABLE IF NOT EXISTS finance_wishlist_shares (
 	CONSTRAINT fk_share_user FOREIGN KEY (shared_with_user_id)
 		REFERENCES simulador_utilizadores(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS yeastar_call_reports (
+	id INT AUTO_INCREMENT PRIMARY KEY,
+	source_ip VARCHAR(64) NULL,
+	payload_json LONGTEXT NULL,
+	headers_json LONGTEXT NULL,
+	received_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
