@@ -68,12 +68,30 @@ Exemplo:
 - Se o dia 8 cair ao sábado/domingo, o ciclo começa no próximo dia útil.
 
 
+## Frontend (SPA Vue 3)
+A interface principal é um SPA Vue 3 (dark-premium + glass, mobile-first), servido em `financeiro.softpinto.pt`. Segue o mesmo padrão do CRM.
+
+- Código em `frontend/` (Vite + Vue + vue-router + axios + PrimeVue).
+  - `frontend/shared/` — design system (`style.css`), cliente API (`api.js`), tema (`useTheme.js`), formatadores (`format.js`).
+  - `frontend/app/` — `App.vue` (shell), `router.js`, `views/*`, `components/*`.
+- Build → `public/financeiro/`, servido pelo Express (estático + fallback do SPA).
+
+Comandos (a partir da raiz):
+- Instalar deps do frontend: `npm run web:install`
+- Dev (proxy `/api` → Express :3000): em dois terminais, `npm run dev` e `npm run web:dev` (abre em :5174)
+- Build de produção: `npm run web:build`
+- Regenerar ícones/favicons a partir de `frontend/app/public/icon.svg`: `npm run icons`
+
+Views já em Vue: Login, Dashboard, Movimentos, Categorias, Budgets, Objetivos, Partilhar.
+Ainda em EJS (a portar): Wishlist, Imóveis, Admin de utilizadores, exportação de relatórios.
+
 ## Estrutura Rápida
-- `controllers/` lógica de rotas e renderização
+- `controllers/` lógica de rotas e renderização (EJS legado)
 - `models/` acesso à base de dados
 - `services/` utilitários de negócio (períodos, conversões, etc.)
-- `views/` templates EJS
-- `routes/` definição de rotas
+- `views/` templates EJS (legado, a substituir pelo SPA)
+- `routes/` definição de rotas (`apiRoutes.js` serve o SPA)
+- `frontend/` SPA Vue 3 (UI principal)
 
 ## Notas
 - Anexos de imagem são convertidos para PDF no upload.

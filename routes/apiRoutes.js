@@ -83,21 +83,43 @@ router.post('/login', async (req, res) => {
       secret,
       { expiresIn: '30d' }
     );
-    return res.json({
-      token,
-      user: {
-        id: user.id,
-        nome: user.nome,
-        email: user.email,
-        role: user.role,
-        finance_group_id: groupId,
-        cycle_day: user.ciclo_dia,
-        cycle_next_business_day: user.ciclo_proximo_util,
-      },
-    });
+    const safeUser = {
+      id: user.id,
+      nome: user.nome,
+      email: user.email,
+      role: user.role,
+      finance_group_id: groupId,
+      cycle_day: user.ciclo_dia,
+      cycle_next_business_day: user.ciclo_proximo_util,
+    };
+    // Also open a session so the web SPA (cookie auth, withCredentials) works.
+    if (req.session) req.session.simUser = safeUser;
+    return res.json({ token, user: safeUser });
   } catch (err) {
     return res.status(500).json({ error: 'server' });
   }
+});
+
+// Current session/token user — used by the SPA to bootstrap auth.
+router.get('/me', apiAuth, (req, res) => {
+  const u = req.user;
+  return res.json({
+    user: {
+      id: u.id,
+      nome: u.nome,
+      email: u.email,
+      role: u.role,
+      finance_group_id: u.finance_group_id,
+      cycle_day: u.cycle_day,
+      cycle_next_business_day: u.cycle_next_business_day,
+    },
+  });
+});
+
+// End the web session.
+router.post('/logout', (req, res) => {
+  if (req.session) return req.session.destroy(() => res.json({ ok: true }));
+  return res.json({ ok: true });
 });
 
 router.get('/categories', apiAuth, async (req, res) => {

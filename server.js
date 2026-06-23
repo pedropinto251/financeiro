@@ -16,6 +16,9 @@ app.set('trust proxy', 1);
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
+// Vue SPA build (financeiro.softpinto.pt) lives in public/financeiro and is
+// served at the subdomain root — its /assets, /icon.svg, /manifest, etc.
+app.use(express.static(path.join(__dirname, 'public', 'financeiro')));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
@@ -104,9 +107,26 @@ app.use((req, res, next) => {
 });
 
 // --- Rotas ---
+// API first (the SPA + native app talk to /api).
+app.use('/api', apiRoutes);
+
+// Serve the Vue SPA index for the routes it owns (and deep links / refresh).
+const spaIndex = path.join(__dirname, 'public', 'financeiro', 'index.html');
+const sendApp = (req, res, next) => {
+	if (require('fs').existsSync(spaIndex)) return res.sendFile(spaIndex);
+	return next(); // SPA not built yet → fall back to legacy EJS below
+};
+const SPA_PATHS = ['/', '/login', '/dashboard', '/movimentos', '/categorias', '/budgets', '/objetivos', '/partilhar'];
+SPA_PATHS.forEach((p) => app.get(p, sendApp));
+
+// Legacy EJS routes for features not yet ported to the SPA
+// (wishlist, imóveis, admin de utilizadores, exportação de relatórios, downloads).
 app.use('/', authRoutes);
 app.use('/', homeRoutes);
-app.use('/api', apiRoutes);
+
+// SPA fallback: any other non-API GET returns the app shell so client-side
+// routes work on refresh / deep link.
+app.get(/^\/(?!api\/).*/, sendApp);
 
 // 404
 app.use((req, res) => {

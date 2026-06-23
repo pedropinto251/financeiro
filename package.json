@@ -6,6 +6,10 @@
   "scripts": {
     "dev": "nodemon server.js",
     "start": "node server.js",
+    "web:install": "npm --prefix frontend install",
+    "web:dev": "npm --prefix frontend run dev",
+    "web:build": "npm --prefix frontend run build",
+    "icons": "node scripts/generate-icons.js",
     "postinstall": "npx playwright install chromium",
     "test": "echo \"no tests\""
   },
@@ -38,6 +42,7 @@
     "sharp": "^0.33.5"
   },
   "devDependencies": {
+    "basic-ftp": "^6.0.1",
     "nodemon": "^3.1.11"
   }
 }

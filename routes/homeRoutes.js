@@ -6,7 +6,6 @@ const {
   renderCategories,
   renderBudgets,
   renderShare,
-  renderWishlist,
   renderGoals,
   renderRealEstate,
   renderAdminUsers,
@@ -19,18 +18,9 @@ const {
   handleCreateTransaction,
   handleShare,
   handleDownloadDocument,
-  handleCreateWishlist,
-  handleMarkWishlistPurchased,
-  handleCreateWishlistProject,
-  handleCreateWishlistList,
-  handleWishlistImage,
-  handleCreateWishlistShare,
   handleUpdateTransaction,
   handleVoidTransaction,
   handleDeleteTransaction,
-  handleUpdateWishlistItem,
-  handleDeleteWishlistItem,
-  handleRevertWishlistItem,
   handleCreateGoal,
   handleUpdateGoal,
   handleDeleteGoal,
@@ -44,7 +34,6 @@ const {
   handleExportReport,
 } = require('../controllers/financeController');
 const upload = require('../config/upload');
-const wishlistUpload = require('../config/wishlistUpload');
 
 const router = express.Router();
 
@@ -60,7 +49,6 @@ router.get('/transactions', ensureAuth, renderTransactions);
 router.get('/categories', ensureAuth, renderCategories);
 router.get('/budgets', ensureAuth, renderBudgets);
 router.get('/share', ensureAuth, renderShare);
-router.get('/wishlist', ensureAuth, renderWishlist);
 router.get('/goals', ensureAuth, renderGoals);
 router.get('/realestate', ensureAuth, renderRealEstate);
 router.get('/realestate/data', ensureAuth, handleRealEstateData);
@@ -75,18 +63,9 @@ router.post('/budgets/update', ensureAuth, handleUpdateBudget);
 router.post('/budgets/delete', ensureAuth, handleDeleteBudget);
 router.post('/transactions', ensureAuth, upload.single('documento'), handleCreateTransaction);
 router.post('/share', ensureAuth, handleShare);
-router.post('/wishlist', ensureAuth, wishlistUpload.single('image'), handleCreateWishlist);
-router.post('/wishlist/purchased', ensureAuth, handleMarkWishlistPurchased);
-router.post('/wishlist/project', ensureAuth, handleCreateWishlistProject);
-router.post('/wishlist/list', ensureAuth, handleCreateWishlistList);
-router.post('/wishlist/share', ensureAuth, handleCreateWishlistShare);
-router.get('/wishlist/image/:id', ensureAuth, handleWishlistImage);
 router.post('/transactions/update', ensureAuth, upload.single('documento'), handleUpdateTransaction);
 router.post('/transactions/void', ensureAuth, handleVoidTransaction);
 router.post('/transactions/delete', ensureAuth, handleDeleteTransaction);
-router.post('/wishlist/update', ensureAuth, handleUpdateWishlistItem);
-router.post('/wishlist/delete', ensureAuth, handleDeleteWishlistItem);
-router.post('/wishlist/revert', ensureAuth, handleRevertWishlistItem);
 router.post('/goals', ensureAuth, handleCreateGoal);
 router.post('/goals/update', ensureAuth, handleUpdateGoal);
 router.post('/goals/delete', ensureAuth, handleDeleteGoal);
