@@ -5,11 +5,12 @@ import { useConfirm } from 'primevue/useconfirm';
 import { useToast } from 'primevue/usetoast';
 import ProgressSpinner from 'primevue/progressspinner';
 import api from '@shared/api';
-import { fmtEurCents } from '@shared/format';
+import { fmtEurCents, fmtDateShort, todayIso } from '@shared/format';
 
 const confirm = useConfirm();
 const toast = useToast();
 const list = ref([]);
+const transfers = ref([]);
 const loading = ref(true);
 const dlg = ref(false);
 const editing = ref(null);
@@ -17,12 +18,46 @@ const busy = ref(false);
 const COLORS = ['#10b981', '#5b8cff', '#f59e0b', '#fb7185', '#a78bfa', '#22d3ee', '#34d399', '#f97316'];
 const form = ref({ nome: '', cor: COLORS[0], include_in_total: true });
 
+const trDlg = ref(false);
+const trForm = ref({ from: '', to: '', amount: null, date: todayIso(), description: '' });
+
 async function load(silent = false) {
   if (!silent) loading.value = true;
-  try { list.value = (await api.get('/accounts')).accounts || []; }
-  catch (e) { /* */ } finally { loading.value = false; }
+  try {
+    const [a, t] = await Promise.all([
+      api.get('/accounts'),
+      api.get('/transfers').then((r) => r.transfers || []).catch(() => []),
+    ]);
+    list.value = a.accounts || [];
+    transfers.value = t;
+  } catch (e) { /* */ } finally { loading.value = false; }
 }
 onMounted(load);
+
+function openTransfer() {
+  const from = list.value[0]?.id || '';
+  const to = list.value.find((x) => x.id !== from)?.id || '';
+  trForm.value = { from, to, amount: null, date: todayIso(), description: '' };
+  trDlg.value = true;
+}
+async function saveTransfer() {
+  if (!trForm.value.from || !trForm.value.to || !trForm.value.amount) { toast.add({ severity: 'warn', summary: 'Faltam dados', life: 2500 }); return; }
+  if (trForm.value.from === trForm.value.to) { toast.add({ severity: 'warn', summary: 'Escolhe contas diferentes', life: 2500 }); return; }
+  busy.value = true;
+  try {
+    await api.post('/transfers', { from_account_id: trForm.value.from, to_account_id: trForm.value.to, amount: trForm.value.amount, date: trForm.value.date, description: trForm.value.description || null });
+    toast.add({ severity: 'success', summary: 'Transferido', life: 2000 });
+    trDlg.value = false; await load(true);
+    window.dispatchEvent(new CustomEvent('financeiro:tx-changed'));
+  } catch (e) { /* */ } finally { busy.value = false; }
+}
+function removeTransfer(t) {
+  confirm.require({
+    message: `Eliminar a transferência de ${fmtEurCents(t.valor)}?`, header: 'Confirmar', icon: 'pi pi-exclamation-triangle',
+    acceptLabel: 'Eliminar', rejectLabel: 'Cancelar', acceptClass: 'p-button-danger',
+    accept: async () => { try { await api.delete(`/transfers/${t.id}`); toast.add({ severity: 'success', summary: 'Eliminada', life: 2000 }); await load(true); window.dispatchEvent(new CustomEvent('financeiro:tx-changed')); } catch (e) { /* */ } },
+  });
+}
 
 const total = computed(() => list.value.reduce((a, x) => a + Number(x.saldo || 0), 0));
 
@@ -55,7 +90,10 @@ function remove(a) {
   <div class="page">
     <div class="page-head">
       <div><h1>Contas</h1><p class="sub">Carteiras e saldos (ex.: cartão de alimentação)</p></div>
-      <button class="btn btn-primary btn-sm" @click="add"><i class="pi pi-plus" /> Nova</button>
+      <div class="head-actions">
+        <button v-if="list.length >= 2" class="btn btn-sm" @click="openTransfer"><i class="pi pi-arrow-right-arrow-left" /> Transferir</button>
+        <button class="btn btn-primary btn-sm" @click="add"><i class="pi pi-plus" /> Nova</button>
+      </div>
     </div>
 
     <div v-if="loading" class="loading"><ProgressSpinner style="width:40px;height:40px" strokeWidth="4" /></div>
@@ -79,8 +117,42 @@ function remove(a) {
         </div>
       </section>
 
+      <section v-if="transfers.length" class="surface card">
+        <div class="card-head"><h2>Transferências recentes</h2></div>
+        <div class="rows">
+          <div v-for="t in transfers" :key="t.id" class="row">
+            <span class="a-ic" style="background:var(--brand-soft);color:var(--brand)"><i class="pi pi-arrow-right-arrow-left" /></span>
+            <div class="row-main">
+              <div class="row-title">{{ t.from_nome || '—' }} → {{ t.to_nome || '—' }}</div>
+              <div class="row-sub">{{ fmtDateShort(t.data_transferencia) }}<span v-if="t.descricao"> · {{ t.descricao }}</span></div>
+            </div>
+            <div class="row-amount">{{ fmtEurCents(t.valor) }}</div>
+            <button class="icon-btn danger" @click="removeTransfer(t)" aria-label="Eliminar"><i class="pi pi-trash" /></button>
+          </div>
+        </div>
+      </section>
+
       <p class="muted tiny hint"><i class="pi pi-info-circle" /> Dica: regista o carregamento do cartão como uma <strong>receita</strong> nessa conta (ou cria uma <strong>fixa</strong>). As despesas pagas com o cartão descontam só desse saldo.</p>
     </template>
+
+    <Dialog v-model:visible="trDlg" modal header="Transferir entre contas" :style="{ width: '420px', maxWidth: '94vw' }" dismissableMask>
+      <form class="stack" @submit.prevent="saveTransfer">
+        <label class="field"><span>De</span>
+          <select v-model="trForm.from"><option v-for="a in list" :key="a.id" :value="a.id">{{ a.nome }}</option></select>
+        </label>
+        <label class="field"><span>Para</span>
+          <select v-model="trForm.to"><option v-for="a in list" :key="a.id" :value="a.id">{{ a.nome }}</option></select>
+        </label>
+        <label class="field"><span>Valor (€)</span><input v-model.number="trForm.amount" type="number" step="0.01" min="0.01" inputmode="decimal" required /></label>
+        <label class="field"><span>Data</span><input v-model="trForm.date" type="date" required /></label>
+        <label class="field"><span>Descrição (opcional)</span><input v-model="trForm.description" type="text" /></label>
+        <p class="muted tiny" style="margin:0"><i class="pi pi-info-circle" style="color:var(--brand)" /> Move saldo entre contas — não conta como receita nem despesa.</p>
+        <div class="actions">
+          <button type="button" class="btn btn-ghost" @click="trDlg = false">Cancelar</button>
+          <button type="submit" class="btn btn-primary" :disabled="busy"><i v-if="busy" class="pi pi-spin pi-spinner" /> Transferir</button>
+        </div>
+      </form>
+    </Dialog>
 
     <Dialog v-model:visible="dlg" modal :header="editing ? 'Editar conta' : 'Nova conta'" :style="{ width: '400px', maxWidth: '94vw' }" dismissableMask>
       <form class="stack" @submit.prevent="save">
@@ -102,6 +174,7 @@ function remove(a) {
 </template>
 
 <style scoped>
+.head-actions { display: flex; gap: 0.5rem; }
 .total { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.1rem; }
 .t-l { font-size: 0.8rem; color: var(--ink-3); font-weight: 600; }
 .t-v { font-family: var(--font-display); font-weight: 700; font-size: 1.3rem; }

@@ -61,7 +61,29 @@ async function linkUserToGroupByEmail({ ownerUserId, ownerGroupId, email }) {
   return { ok: true, user: target };
 }
 
+async function listGroupMembers(groupId) {
+  const [rows] = await pool.query(
+    'SELECT id, nome, email FROM simulador_utilizadores WHERE finance_group_id = ? ORDER BY nome',
+    [groupId]
+  );
+  return rows;
+}
+
+// Remove um membro do grupo partilhado dando-lhe um grupo novo (vazio). Os
+// dados já partilhados permanecem no grupo (não há forma limpa de os separar).
+async function removeMemberFromGroup(groupId, userId) {
+  const [rows] = await pool.query(
+    'SELECT id, nome FROM simulador_utilizadores WHERE id = ? AND finance_group_id = ?',
+    [userId, groupId]
+  );
+  if (!rows[0]) return false;
+  await createGroupForUser(userId, rows[0].nome);
+  return true;
+}
+
 module.exports = {
   ensureGroupForUser,
   linkUserToGroupByEmail,
+  listGroupMembers,
+  removeMemberFromGroup,
 };

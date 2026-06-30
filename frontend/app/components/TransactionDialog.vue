@@ -68,6 +68,8 @@ async function save() {
       await api.put(`/transactions/${props.transaction.id}`, payload);
       id = props.transaction.id;
     } else {
+      // client_uid: chave de idempotência — evita duplicar se a sync reenviar.
+      payload.client_uid = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
       // offlineQueue: se não houver rede, fica guardado e sincroniza depois.
       const res = await api.post('/transactions', payload, { offlineQueue: true });
       if (res && res.queued) {

@@ -1,7 +1,33 @@
 const pool = require('../config/db');
 const { accountsHaveColumn, getDefaultAccountId } = require('./financeAccountModel');
 
-async function createTransaction({ groupId, userId, type, categoryId, amount, occurredOn, description, source, accountId }) {
+// Idempotência: evita duplicados quando a sync offline reenvia o mesmo pedido.
+let idemReady = false;
+async function ensureIdem() {
+  if (idemReady) return;
+  try {
+    await pool.query(
+      `CREATE TABLE IF NOT EXISTS finance_idempotency (
+         client_uid VARCHAR(64) NOT NULL PRIMARY KEY,
+         tx_id INT NOT NULL,
+         finance_group_id INT NOT NULL,
+         data_criado TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
+    );
+    idemReady = true;
+  } catch (e) { /* sem privilégio → idempotência desativada */ }
+}
+async function getIdempotent(uid) {
+  try { await ensureIdem(); const [r] = await pool.query('SELECT tx_id FROM finance_idempotency WHERE client_uid = ?', [uid]); return r[0] ? r[0].tx_id : null; }
+  catch (e) { return null; }
+}
+async function recordIdempotent(uid, groupId, txId) {
+  try { await ensureIdem(); await pool.query('INSERT IGNORE INTO finance_idempotency (client_uid, tx_id, finance_group_id) VALUES (?, ?, ?)', [uid, txId, groupId]); }
+  catch (e) { /* */ }
+}
+
+async function createTransaction({ groupId, userId, type, categoryId, amount, occurredOn, description, source, accountId, clientUid }) {
+  if (clientUid) { const dup = await getIdempotent(clientUid); if (dup) return dup; }
   if (accountsHaveColumn()) {
     let acctId = accountId;
     if (!acctId) { try { acctId = await getDefaultAccountId(groupId); } catch (e) { acctId = null; } }
@@ -11,6 +37,7 @@ async function createTransaction({ groupId, userId, type, categoryId, amount, oc
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
       [groupId, userId, type, categoryId || null, amount, occurredOn, description || null, source || null, acctId || null]
     );
+    if (clientUid) await recordIdempotent(clientUid, groupId, result.insertId);
     return result.insertId;
   }
   const [result] = await pool.query(
@@ -19,6 +46,7 @@ async function createTransaction({ groupId, userId, type, categoryId, amount, oc
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
     [groupId, userId, type, categoryId || null, amount, occurredOn, description || null, source || null]
   );
+  if (clientUid) await recordIdempotent(clientUid, groupId, result.insertId);
   return result.insertId;
 }
 

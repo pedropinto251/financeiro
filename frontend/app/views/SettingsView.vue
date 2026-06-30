@@ -42,6 +42,22 @@ async function toggleNotif() {
 const installed = isStandalonePwa();
 async function doInstall() { await promptInstall(); }
 
+const importing = ref(false);
+async function onImportFile(e) {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  if (!window.confirm('Importar este backup? Os dados são ADICIONADOS aos atuais (não substitui). Recomendado numa conta vazia.')) { e.target.value = ''; return; }
+  importing.value = true;
+  try {
+    const data = JSON.parse(await file.text());
+    const r = await api.post('/import', data);
+    toast.add({ severity: 'success', summary: 'Backup importado', detail: `${r.transactions || 0} movimentos · ${r.categories || 0} categorias · ${r.goals || 0} objetivos.`, life: 5000 });
+    window.dispatchEvent(new CustomEvent('financeiro:tx-changed'));
+  } catch (err) {
+    toast.add({ severity: 'warn', summary: 'Falhou', detail: 'Ficheiro inválido ou erro no servidor.', life: 4000 });
+  } finally { importing.value = false; e.target.value = ''; }
+}
+
 async function doTestNotif() {
   notifBusy.value = true;
   try { const r = await testPush(); toast.add({ severity: r.sent ? 'success' : 'warn', summary: r.sent ? 'Enviada 📨' : 'Sem dispositivos', life: 3000 }); }
@@ -170,6 +186,15 @@ async function save() {
     </section>
 
     <section class="surface card">
+      <div class="card-head"><h2><i class="pi pi-database" /> Dados</h2></div>
+      <p class="muted intro">Exportar é nos Movimentos. Aqui podes <strong>importar</strong> um backup (.json) — os dados são adicionados aos atuais.</p>
+      <label class="btn btn-block import-btn">
+        <i :class="importing ? 'pi pi-spin pi-spinner' : 'pi pi-upload'" /> Importar backup (JSON)
+        <input type="file" accept="application/json,.json" @change="onImportFile" :disabled="importing" hidden />
+      </label>
+    </section>
+
+    <section class="surface card">
       <div class="card-head"><h2><i class="pi pi-bell" /> Notificações push</h2></div>
       <p class="muted intro">Recebe avisos no telemóvel: dia de salário, fixas por lançar e budgets excedidos.</p>
       <p v-if="!pushOk" class="muted tiny">Este dispositivo/navegador não suporta notificações push.</p>
@@ -213,6 +238,7 @@ async function save() {
 .check input { width: auto; min-height: 0; }
 .preview { display: flex; align-items: flex-start; gap: 0.5rem; margin: 1.1rem 0; padding: 0.75rem 0.9rem; border-radius: 12px; background: var(--brand-tint); color: var(--ink-2); font-size: 0.85rem; line-height: 1.45; }
 .preview i { color: var(--brand); margin-top: 1px; }
+.import-btn { cursor: pointer; }
 .notif-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .notif-title { font-weight: 600; font-size: 0.95rem; }
 .ios-hint { display: flex; align-items: flex-start; gap: 0.4rem; margin-top: 0.9rem; line-height: 1.45; }

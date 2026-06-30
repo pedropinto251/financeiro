@@ -1,8 +1,9 @@
 <script setup>
 import { onMounted, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { useToast } from 'primevue/usetoast';
 import Toast from 'primevue/toast';
+import Dialog from 'primevue/dialog';
 import ConfirmDialog from 'primevue/confirmdialog';
 import api, { setApiErrorHandler } from '@shared/api';
 import { useUser } from './lib/useUser';
@@ -12,7 +13,14 @@ import TransactionDialog from './components/TransactionDialog.vue';
 
 const toast = useToast();
 const route = useRoute();
+const router = useRouter();
 const drawerOpen = ref(false);
+const showOnboarding = ref(false);
+function dismissOnboarding(goConfig) {
+  showOnboarding.value = false;
+  try { localStorage.setItem('financeiro-onboarded', '1'); } catch (e) { /* */ }
+  if (goConfig) router.push('/definicoes');
+}
 const { user, load: loadUser, clear } = useUser();
 const { resolved: theme, init: initTheme, toggle: toggleTheme } = useTheme();
 initTheme();
@@ -67,7 +75,11 @@ onMounted(async () => {
     toast.add({ severity: 'error', summary: 'Erro', detail: err.message, life: 5000 });
   });
   await loadUser();
-  if (user.value) { loadCategories(); syncOutbox(); }
+  if (user.value) {
+    loadCategories();
+    syncOutbox();
+    try { if (!localStorage.getItem('financeiro-onboarded')) showOnboarding.value = true; } catch (e) { /* */ }
+  }
   window.addEventListener('online', syncOutbox);
   window.addEventListener('focus', syncOutbox);
   // iOS não tem background sync — sincroniza ao voltar a app para 1º plano.
@@ -132,6 +144,18 @@ onMounted(async () => {
     </main>
 
     <TransactionDialog v-model:visible="quickAdd" :categories="categories" :accounts="accounts" @saved="onTxSaved" />
+
+    <Dialog v-model:visible="showOnboarding" modal :closable="false" header="Bem-vindo 👋" :style="{ width: '420px', maxWidth: '94vw' }">
+      <div class="stack">
+        <p style="margin:0;line-height:1.55;color:var(--ink-2)">Para começar, define o <strong>dia em que recebes o salário</strong> — o teu "mês financeiro" (saldos, budgets e estatísticas) alinha-se a esse dia.</p>
+        <p class="muted tiny" style="margin:0">Podes também definir uma meta de poupança e ativar notificações nas Definições.</p>
+        <div style="display:flex;gap:0.6rem;justify-content:flex-end;margin-top:0.4rem">
+          <button class="btn btn-ghost" @click="dismissOnboarding(false)">Mais tarde</button>
+          <button class="btn btn-primary" @click="dismissOnboarding(true)">Configurar agora</button>
+        </div>
+      </div>
+    </Dialog>
+
     <Toast position="top-center" />
     <ConfirmDialog />
   </div>

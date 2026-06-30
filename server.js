@@ -11,6 +11,15 @@ const app = express();
 
 // cPanel / reverse proxy
 app.set('trust proxy', 1);
+app.disable('x-powered-by');
+
+// Headers de segurança básicos.
+app.use((req, res, next) => {
+	res.setHeader('X-Content-Type-Options', 'nosniff');
+	res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+	res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+	next();
+});
 
 // --- Config Express ---
 app.set('view engine', 'ejs');

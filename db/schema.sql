@@ -134,6 +134,19 @@ CREATE TABLE IF NOT EXISTS finance_monthly_savings (
 		REFERENCES finance_groups(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS finance_transfers (
+	id INT AUTO_INCREMENT PRIMARY KEY,
+	finance_group_id INT NOT NULL,
+	from_account_id INT NOT NULL,
+	to_account_id INT NOT NULL,
+	valor DECIMAL(12,2) NOT NULL,
+	data_transferencia DATE NOT NULL,
+	descricao VARCHAR(255) NULL,
+	data_criado TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	CONSTRAINT fk_transfer_group FOREIGN KEY (finance_group_id)
+		REFERENCES finance_groups(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS finance_recurring (
 	id INT AUTO_INCREMENT PRIMARY KEY,
 	finance_group_id INT NOT NULL,

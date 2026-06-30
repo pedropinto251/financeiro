@@ -95,6 +95,21 @@ async function listAccounts(groupId) {
      ORDER BY a.is_default DESC, a.ordem ASC, a.nome ASC`,
     [groupId]
   );
+  // Ajuste por transferências (saem da origem, entram no destino). Tabela pode não existir.
+  try {
+    const [tr] = await pool.query(
+      'SELECT from_account_id, to_account_id, valor FROM finance_transfers WHERE finance_group_id = ?',
+      [groupId]
+    );
+    if (tr.length) {
+      const adj = new Map();
+      for (const t of tr) {
+        adj.set(t.from_account_id, (adj.get(t.from_account_id) || 0) - Number(t.valor));
+        adj.set(t.to_account_id, (adj.get(t.to_account_id) || 0) + Number(t.valor));
+      }
+      for (const row of rows) row.saldo = Number(row.saldo) + (adj.get(row.id) || 0);
+    }
+  } catch (e) { /* sem tabela de transferências */ }
   return rows;
 }
 

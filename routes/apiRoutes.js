@@ -3,8 +3,10 @@ const jwt = require('jsonwebtoken');
 const { getSimUserByEmail, getSimUserById, listSimUsers, validateSimPassword, updateUserCycle } = require('../models/simulatorUserModel');
 const push = require('../services/push');
 const pushModel = require('../models/financePushModel');
-const { ensureGroupForUser, linkUserToGroupByEmail } = require('../models/financeGroupModel');
+const { ensureGroupForUser, linkUserToGroupByEmail, listGroupMembers, removeMemberFromGroup } = require('../models/financeGroupModel');
 const { apiAuth } = require('../middleware/apiAuth');
+const { rateLimit } = require('../middleware/rateLimit');
+const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 12, prefix: 'login:' });
 const upload = require('../config/upload');
 const path = require('path');
 const { listCategories, createCategory, updateCategory, deleteCategory } = require('../models/financeCategoryModel');
@@ -59,6 +61,7 @@ const {
   updateAccount,
   deleteAccount,
 } = require('../models/financeAccountModel');
+const { createTransfer, listTransfers, deleteTransfer } = require('../models/financeTransferModel');
 const {
   listRecurring,
   getRecurringById,
@@ -124,7 +127,7 @@ const router = express.Router();
 router.post('/yeastar/call-report', handleYeastarCallReport);
 router.get('/yeastar/call-report', handleYeastarCallReport);
 
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
   try {
     const { email, password } = req.body || {};
     if (!email || !password) return res.status(400).json({ error: 'missing' });
@@ -258,7 +261,7 @@ router.get('/cron-info', apiAuth, async (req, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'forbidden' });
     const token = await push.getCronToken();
     const base = `${req.protocol}://${req.get('host')}`;
-    return res.json({ url: `${base}/api/cron/notify?token=${token}`, cron: `0 8 * * * curl -s "${base}/api/cron/notify?token=${token}" >/dev/null 2>&1` });
+    return res.json({ url: `${base}/api/cron/notify`, token, cron: `0 * * * * curl -s -H "x-cron-token: ${token}" "${base}/api/cron/notify" >/dev/null 2>&1` });
   } catch (err) { return res.status(500).json({ error: 'server' }); }
 });
 
@@ -267,7 +270,8 @@ router.get('/cron-info', apiAuth, async (req, res) => {
 router.get('/cron/notify', async (req, res) => {
   try {
     const token = await push.getCronToken();
-    if (!req.query.token || req.query.token !== token) return res.status(403).json({ error: 'forbidden' });
+    const provided = req.get('x-cron-token') || req.query.token;
+    if (!provided || provided !== token) return res.status(403).json({ error: 'forbidden' });
     const subs = await pushModel.listAll();
     const today = formatDate(new Date());
     const subsByUser = new Map();
@@ -532,6 +536,7 @@ router.post('/transactions', apiAuth, async (req, res) => {
       description: description ? String(description).trim() : null,
       source: source ? String(source).trim() : null,
       accountId: req.body.account_id ? Number(req.body.account_id) : null,
+      clientUid: req.body.client_uid ? String(req.body.client_uid).slice(0, 64) : null,
     });
     return res.status(201).json({ id });
   } catch (err) {
@@ -682,6 +687,33 @@ router.delete('/accounts/:id', apiAuth, async (req, res) => {
   } catch (err) {
     return res.status(500).json({ error: 'server' });
   }
+});
+
+// ── Transferências entre contas ───────────────────────────────────────────
+router.get('/transfers', apiAuth, async (req, res) => {
+  try {
+    const transfers = await listTransfers(req.user.finance_group_id);
+    return res.json({ transfers });
+  } catch (err) { return res.status(500).json({ error: 'server' }); }
+});
+
+router.post('/transfers', apiAuth, async (req, res) => {
+  try {
+    const { from_account_id, to_account_id, amount, date, description } = req.body || {};
+    const from = Number(from_account_id), to = Number(to_account_id), amt = Number(amount);
+    if (!from || !to || !amt || amt <= 0) return res.status(400).json({ error: 'missing' });
+    if (from === to) return res.status(400).json({ error: 'same_account' });
+    const when = date ? String(date).slice(0, 10) : formatDate(new Date());
+    const id = await createTransfer({ groupId: req.user.finance_group_id, fromAccountId: from, toAccountId: to, amount: amt, date: when, descricao: description ? String(description).trim() : null });
+    return res.status(201).json({ id });
+  } catch (err) { return res.status(500).json({ error: 'server' }); }
+});
+
+router.delete('/transfers/:id', apiAuth, async (req, res) => {
+  try {
+    await deleteTransfer(req.user.finance_group_id, Number(req.params.id));
+    return res.json({ ok: true });
+  } catch (err) { return res.status(500).json({ error: 'server' }); }
 });
 
 // ── Movimentos recorrentes (fixos) ───────────────────────────────────────
@@ -1194,6 +1226,75 @@ router.get('/export/backup.json', apiAuth, async (req, res) => {
   }
 });
 
+// Importar/restaurar a partir de um backup JSON. Aditivo: mapeia por NOME
+// (categorias/contas/objetivos) para funcionar entre instalações diferentes.
+router.post('/import', apiAuth, async (req, res) => {
+  try {
+    const g = req.user.finance_group_id;
+    const data = req.body || {};
+    const norm = (s) => String(s || '').toLowerCase().trim();
+
+    const existingCats = await listCategories(g);
+    const catMap = new Map(existingCats.map((c) => [`${c.tipo}|${norm(c.nome)}`, c.id]));
+    const ensureCat = async (nome, tipo) => {
+      if (!nome) return null;
+      const t = tipo === 'income' ? 'income' : 'expense';
+      const k = `${t}|${norm(nome)}`;
+      if (catMap.has(k)) return catMap.get(k);
+      const id = await createCategory({ groupId: g, name: String(nome).trim(), type: t });
+      catMap.set(k, id); return id;
+    };
+    for (const c of data.categories || []) await ensureCat(c.nome, c.tipo);
+
+    const existingAccs = await listAccounts(g).catch(() => []);
+    const accMap = new Map(existingAccs.map((a) => [norm(a.nome), a.id]));
+    const ensureAcc = async (nome, cor, icone, inc) => {
+      if (!nome) return null;
+      const k = norm(nome);
+      if (accMap.has(k)) return accMap.get(k);
+      const id = await createAccount({ groupId: g, nome: String(nome).trim(), cor, icone, includeInTotal: inc });
+      accMap.set(k, id); return id;
+    };
+    for (const a of data.accounts || []) if (!a.is_default) await ensureAcc(a.nome, a.cor, a.icone, a.include_in_total !== 0);
+
+    let txN = 0;
+    for (const t of data.transactions || []) {
+      if (!t || !t.valor) continue;
+      const catId = t.categoria_nome ? await ensureCat(t.categoria_nome, t.tipo) : null;
+      await createTransaction({
+        groupId: g, userId: req.user.id, type: t.tipo === 'income' ? 'income' : 'expense',
+        categoryId: catId, amount: Number(t.valor), occurredOn: String(t.data_ocorrencia).slice(0, 10),
+        description: t.descricao || null, source: t.fonte || 'import',
+      });
+      txN += 1;
+    }
+    for (const b of data.budgets || []) {
+      const catId = await ensureCat(b.categoria_nome, b.tipo || 'expense');
+      if (catId && Number(b.valor) > 0) await upsertBudget({ groupId: g, categoryId: catId, amount: Number(b.valor) });
+    }
+    const goalMap = new Map();
+    for (const go of data.goals || []) {
+      const id = await createGoal({ groupId: g, name: String(go.nome).trim(), targetAmount: Number(go.valor_objetivo || 0), targetDate: go.data_objetivo ? String(go.data_objetivo).slice(0, 10) : null });
+      goalMap.set(norm(go.nome), id);
+    }
+    for (const al of data.allocations || []) {
+      const gid = goalMap.get(norm(al.goal_nome));
+      if (gid && Number(al.valor)) await addAllocation({ groupId: g, goalId: gid, userId: req.user.id, amount: Number(al.valor), date: String(al.data_alocacao).slice(0, 10), note: al.nota || null });
+    }
+    for (const r of data.recurring || []) {
+      if (!r || !r.valor) continue;
+      const catId = r.categoria_nome ? await ensureCat(r.categoria_nome, r.tipo) : null;
+      const accId = r.account_nome ? await ensureAcc(r.account_nome) : null;
+      const freq = r.frequencia === 'dias' ? 'dias' : 'mensal';
+      const proxima = firstOccurrence(freq, r.intervalo || 1, r.dia || 1, r.proxima_data ? String(r.proxima_data).slice(0, 10) : formatDate(new Date()));
+      await createRecurring({ groupId: g, tipo: r.tipo === 'income' ? 'income' : 'expense', categoryId: catId, amount: Number(r.valor), descricao: r.descricao || null, frequencia: freq, intervalo: r.intervalo || 1, dia: r.dia || 1, proximaData: proxima, ativo: r.ativo ? 1 : 0, accountId: accId });
+    }
+    return res.json({ ok: true, transactions: txN, categories: (data.categories || []).length, goals: (data.goals || []).length });
+  } catch (err) {
+    return res.status(500).json({ error: 'server' });
+  }
+});
+
 router.post('/share', apiAuth, async (req, res) => {
   try {
     const groupId = req.user.finance_group_id;
@@ -1211,6 +1312,26 @@ router.post('/share', apiAuth, async (req, res) => {
       return res.status(400).json({ error: 'invalid' });
     }
     return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ error: 'server' });
+  }
+});
+
+router.get('/share/members', apiAuth, async (req, res) => {
+  try {
+    const members = await listGroupMembers(req.user.finance_group_id);
+    return res.json({ members, me: req.user.id });
+  } catch (err) {
+    return res.status(500).json({ error: 'server' });
+  }
+});
+
+router.delete('/share/members/:id', apiAuth, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (id === req.user.id) return res.status(400).json({ error: 'self' });
+    const ok = await removeMemberFromGroup(req.user.finance_group_id, id);
+    return ok ? res.json({ ok: true }) : res.status(404).json({ error: 'not_found' });
   } catch (err) {
     return res.status(500).json({ error: 'server' });
   }
