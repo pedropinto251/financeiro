@@ -7,6 +7,10 @@ import CategoriesView from './views/CategoriesView.vue';
 import BudgetsView from './views/BudgetsView.vue';
 import GoalsView from './views/GoalsView.vue';
 import ShareView from './views/ShareView.vue';
+import RecurringView from './views/RecurringView.vue';
+import AccountsView from './views/AccountsView.vue';
+import StatsView from './views/StatsView.vue';
+import SettingsView from './views/SettingsView.vue';
 
 const router = createRouter({
   history: createWebHistory('/'),
@@ -18,8 +22,12 @@ const router = createRouter({
     { path: '/movimentos', name: 'transactions', component: TransactionsView },
     { path: '/categorias', name: 'categories', component: CategoriesView },
     { path: '/budgets', name: 'budgets', component: BudgetsView },
+    { path: '/fixas', name: 'recurring', component: RecurringView },
+    { path: '/contas', name: 'accounts', component: AccountsView },
+    { path: '/estatisticas', name: 'stats', component: StatsView },
     { path: '/objetivos', name: 'goals', component: GoalsView },
     { path: '/partilhar', name: 'share', component: ShareView },
+    { path: '/definicoes', name: 'settings', component: SettingsView },
     { path: '/:pathMatch(.*)*', redirect: '/dashboard' },
   ],
 });

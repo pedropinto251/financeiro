@@ -1,6 +1,17 @@
+// Sentinel "cycle day" values that mean a rule rather than a fixed day number.
+// Stored in ciclo_dia so no DB schema change is needed.
+const CYCLE_LAST_BUSINESS = 99;  // último dia útil do mês
+const CYCLE_LAST_CALENDAR = 100; // último dia do mês (civil)
+
+function isCycleSentinel(value) {
+  const n = Number(value);
+  return n === CYCLE_LAST_BUSINESS || n === CYCLE_LAST_CALENDAR;
+}
+
 function clampCycleDay(value) {
   const day = Number(value);
   if (!Number.isFinite(day)) return 1;
+  if (isCycleSentinel(day)) return day; // preserve sentinels
   return Math.min(31, Math.max(1, Math.floor(day)));
 }
 
@@ -19,7 +30,22 @@ function adjustToNextBusinessDay(date) {
   return next;
 }
 
+function adjustToPrevBusinessDay(date) {
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const dow = d.getDay();
+  if (dow === 6) d.setDate(d.getDate() - 1);       // Sáb → Sex
+  else if (dow === 0) d.setDate(d.getDate() - 2);  // Dom → Sex
+  return d;
+}
+
 function getCycleStartForMonth(year, monthIndex, cycleDay, adjustWeekend) {
+  const dayNum = Number(cycleDay);
+  if (dayNum === CYCLE_LAST_CALENDAR) {
+    return new Date(year, monthIndex, daysInMonth(year, monthIndex));
+  }
+  if (dayNum === CYCLE_LAST_BUSINESS) {
+    return adjustToPrevBusinessDay(new Date(year, monthIndex, daysInMonth(year, monthIndex)));
+  }
   const clampedDay = Math.min(clampCycleDay(cycleDay), daysInMonth(year, monthIndex));
   let start = new Date(year, monthIndex, clampedDay);
   if (adjustWeekend) {
@@ -72,6 +98,9 @@ function getCyclePeriod(referenceDate, cycleDay, adjustWeekend) {
 
 module.exports = {
   clampCycleDay,
+  isCycleSentinel,
   getCyclePeriod,
   getCyclePeriodForMonth,
+  CYCLE_LAST_BUSINESS,
+  CYCLE_LAST_CALENDAR,
 };

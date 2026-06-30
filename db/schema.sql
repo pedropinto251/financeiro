@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS finance_transactions (
 	data_ocorrencia DATETIME NOT NULL,
 	descricao TEXT,
 	fonte VARCHAR(255),
+	account_id INT NULL,
 	status ENUM('active','void') NOT NULL DEFAULT 'active',
 	data_criado TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 	CONSTRAINT fk_tx_group FOREIGN KEY (finance_group_id)
@@ -61,6 +62,21 @@ CREATE TABLE IF NOT EXISTS finance_transactions (
 		REFERENCES simulador_utilizadores(id) ON DELETE CASCADE,
 	CONSTRAINT fk_tx_category FOREIGN KEY (categoria_id)
 		REFERENCES finance_categories(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS finance_accounts (
+	id INT AUTO_INCREMENT PRIMARY KEY,
+	finance_group_id INT NOT NULL,
+	nome VARCHAR(80) NOT NULL,
+	cor VARCHAR(16) NULL,
+	icone VARCHAR(32) NULL,
+	is_default TINYINT NOT NULL DEFAULT 0,
+	ativo TINYINT NOT NULL DEFAULT 1,
+	include_in_total TINYINT NOT NULL DEFAULT 1,
+	ordem INT NOT NULL DEFAULT 0,
+	data_criado TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	CONSTRAINT fk_account_group FOREIGN KEY (finance_group_id)
+		REFERENCES finance_groups(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS finance_documents (
@@ -108,6 +124,32 @@ CREATE TABLE IF NOT EXISTS finance_goal_allocations (
 		REFERENCES finance_goals(id) ON DELETE CASCADE,
 	CONSTRAINT fk_goal_alloc_user FOREIGN KEY (user_id)
 		REFERENCES simulador_utilizadores(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS finance_monthly_savings (
+	finance_group_id INT NOT NULL PRIMARY KEY,
+	valor_meta DECIMAL(12,2) NOT NULL DEFAULT 0,
+	atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+	CONSTRAINT fk_savings_group FOREIGN KEY (finance_group_id)
+		REFERENCES finance_groups(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS finance_recurring (
+	id INT AUTO_INCREMENT PRIMARY KEY,
+	finance_group_id INT NOT NULL,
+	tipo VARCHAR(10) NOT NULL DEFAULT 'expense',
+	categoria_id INT NULL,
+	valor DECIMAL(12,2) NOT NULL DEFAULT 0,
+	descricao VARCHAR(255) NULL,
+	frequencia VARCHAR(10) NOT NULL DEFAULT 'mensal',
+	intervalo INT NOT NULL DEFAULT 1,
+	dia INT NOT NULL DEFAULT 1,
+	proxima_data DATE NOT NULL,
+	ativo TINYINT NOT NULL DEFAULT 1,
+	account_id INT NULL,
+	data_criado TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	CONSTRAINT fk_recurring_group FOREIGN KEY (finance_group_id)
+		REFERENCES finance_groups(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS finance_wishlist_items (

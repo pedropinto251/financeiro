@@ -20,8 +20,10 @@ initTheme();
 // from anywhere. Categories are loaded once and shared.
 const quickAdd = ref(false);
 const categories = ref([]);
+const accounts = ref([]);
 async function loadCategories() {
   try { categories.value = await api.get('/categories').then((r) => r.categories || r); } catch (e) { /* */ }
+  try { accounts.value = await api.get('/accounts').then((r) => r.accounts || []); } catch (e) { /* */ }
 }
 function onTxSaved() {
   // Let any open view refresh itself.
@@ -33,8 +35,12 @@ const NAV = [
   { to: '/movimentos', label: 'Movimentos', icon: 'pi pi-arrow-right-arrow-left' },
   { to: '/categorias', label: 'Categorias', icon: 'pi pi-tags' },
   { to: '/budgets', label: 'Budgets', icon: 'pi pi-bullseye' },
+  { to: '/fixas', label: 'Fixas', icon: 'pi pi-sync' },
+  { to: '/contas', label: 'Contas', icon: 'pi pi-wallet' },
   { to: '/objetivos', label: 'Objetivos', icon: 'pi pi-flag' },
+  { to: '/estatisticas', label: 'Estatísticas', icon: 'pi pi-chart-bar' },
   { to: '/partilhar', label: 'Partilhar', icon: 'pi pi-users' },
+  { to: '/definicoes', label: 'Definições', icon: 'pi pi-cog' },
 ];
 
 async function logout() {
@@ -104,7 +110,7 @@ onMounted(async () => {
       <RouterView />
     </main>
 
-    <TransactionDialog v-model:visible="quickAdd" :categories="categories" @saved="onTxSaved" />
+    <TransactionDialog v-model:visible="quickAdd" :categories="categories" :accounts="accounts" @saved="onTxSaved" />
     <Toast position="top-center" />
     <ConfirmDialog />
   </div>

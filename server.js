@@ -145,6 +145,9 @@ app.use((err, req, res, next) => {
 	}
 	return res.redirect('/login');
 });
+// Garante o esquema de contas/carteiras (tabela + coluna account_id) ao arrancar.
+require('./models/financeAccountModel').ensureSchema().catch((e) => console.error('ensureSchema:', e.message));
+
 // --- Start ---
 const PORT = process.env.PORT || 3000; // aceita pipe em iisnode
 app.listen(PORT, () => {

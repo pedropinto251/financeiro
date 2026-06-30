@@ -2,10 +2,15 @@ const pool = require('../config/db');
 
 async function listCategories(groupId) {
   const [rows] = await pool.query(
-    `SELECT id, nome, tipo
-     FROM finance_categories
-     WHERE finance_group_id = ?
-     ORDER BY tipo, nome`,
+    `SELECT c.id, c.nome, c.tipo,
+        COUNT(t.id) AS tx_count,
+        COALESCE(SUM(t.valor), 0) AS tx_total
+     FROM finance_categories c
+     LEFT JOIN finance_transactions t
+       ON t.categoria_id = c.id AND t.status = 'active'
+     WHERE c.finance_group_id = ?
+     GROUP BY c.id, c.nome, c.tipo
+     ORDER BY c.tipo, c.nome`,
     [groupId]
   );
   return rows;

@@ -69,6 +69,13 @@ async function updateSimUser({ id, name, email, role, active, cycleDay, cycleNex
 	);
 }
 
+async function updateUserCycle({ id, cycleDay, cycleNextBusinessDay }) {
+	await pool.query(
+		`UPDATE simulador_utilizadores SET ciclo_dia = ?, ciclo_proximo_util = ? WHERE id = ?`,
+		[cycleDay, cycleNextBusinessDay ? 1 : 0, id]
+	);
+}
+
 async function getSimUserByEmailExceptId(email, id) {
 	const [rows] = await pool.query(
 		`SELECT id FROM simulador_utilizadores WHERE email = ? AND id <> ?`,
@@ -84,5 +91,6 @@ module.exports = {
 	listSimUsers,
 	createSimUser,
 	updateSimUser,
+	updateUserCycle,
 	getSimUserByEmailExceptId,
 };

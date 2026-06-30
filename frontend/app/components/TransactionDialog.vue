@@ -8,13 +8,18 @@ import { todayIso } from '@shared/format';
 const props = defineProps({
   visible: Boolean,
   categories: { type: Array, default: () => [] },
+  accounts: { type: Array, default: () => [] },
   transaction: { type: Object, default: null }, // present → edit mode
   initialType: { type: String, default: 'expense' },
 });
 const emit = defineEmits(['update:visible', 'saved']);
 const toast = useToast();
 
-const form = ref({ type: 'expense', amount: null, date: todayIso(), description: '', category_id: '' });
+const defaultAccountId = () => {
+  const d = props.accounts.find((a) => a.is_default) || props.accounts[0];
+  return d ? d.id : '';
+};
+const form = ref({ type: 'expense', amount: null, date: todayIso(), description: '', category_id: '', account_id: '' });
 const file = ref(null);
 const busy = ref(false);
 const isEdit = computed(() => !!props.transaction?.id);
@@ -30,9 +35,10 @@ watch(() => props.visible, (open) => {
       date: String(t.data_ocorrencia || t.date || todayIso()).slice(0, 10),
       description: t.descricao || t.description || '',
       category_id: t.categoria_id || t.category_id || '',
+      account_id: t.account_id || defaultAccountId(),
     };
   } else {
-    form.value = { type: props.initialType, amount: null, date: todayIso(), description: '', category_id: '' };
+    form.value = { type: props.initialType, amount: null, date: todayIso(), description: '', category_id: '', account_id: defaultAccountId() };
   }
 });
 
@@ -55,6 +61,7 @@ async function save() {
       date: form.value.date,
       description: form.value.description || null,
       category_id: form.value.category_id || null,
+      account_id: form.value.account_id || null,
     };
     let id;
     if (isEdit.value) {
@@ -102,6 +109,11 @@ async function save() {
         <select v-model="form.category_id">
           <option value="">Sem categoria</option>
           <option v-for="c in filteredCats" :key="c.id" :value="c.id">{{ c.nome }}</option>
+        </select>
+      </label>
+      <label v-if="accounts.length" class="field"><span>Conta / carteira</span>
+        <select v-model="form.account_id">
+          <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.nome }}</option>
         </select>
       </label>
       <label class="field"><span>Documento</span>

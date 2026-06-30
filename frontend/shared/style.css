@@ -8,43 +8,44 @@
 :root {
   color-scheme: dark;
 
-  /* Surfaces */
-  --bg: #070a12;
-  --bg-2: #0a0f1c;
-  --app-grad: radial-gradient(900px 600px at 12% -8%, rgba(56,128,255,0.16), transparent 60%),
-              radial-gradient(820px 560px at 92% 4%, rgba(139,92,246,0.16), transparent 58%),
-              radial-gradient(700px 700px at 50% 120%, rgba(34,211,238,0.08), transparent 60%),
+  /* Surfaces — grafite com leve tom verde */
+  --bg: #0a0f0d;
+  --bg-2: #0e1512;
+  --dialog-bg: #16211c; /* superfície elevada (modais) — mais clara que os inputs */
+  --app-grad: radial-gradient(900px 600px at 12% -8%, rgba(16,185,129,0.13), transparent 60%),
+              radial-gradient(820px 560px at 92% 4%, rgba(13,148,136,0.11), transparent 58%),
+              radial-gradient(700px 700px at 50% 120%, rgba(16,185,129,0.05), transparent 60%),
               var(--bg);
 
   /* Glass cards */
-  --glass: rgba(20,27,45,0.55);
-  --glass-2: rgba(28,37,61,0.6);
-  --glass-border: rgba(148,170,255,0.14);
-  --glass-border-strong: rgba(148,170,255,0.26);
+  --glass: rgba(20,30,26,0.55);
+  --glass-2: rgba(27,40,34,0.6);
+  --glass-border: rgba(110,190,160,0.12);
+  --glass-border-strong: rgba(110,190,160,0.24);
   --glass-blur: 16px;
 
-  /* Ink */
-  --ink: #f4f7ff;
-  --ink-2: #c6d0e8;
-  --ink-3: #8e9bbd;
-  --ink-4: #67739a;
-  --line: rgba(148,170,255,0.12);
-  --line-2: rgba(148,170,255,0.2);
+  /* Ink — neutros grafite */
+  --ink: #eef3f0;
+  --ink-2: #c3d2cb;
+  --ink-3: #8ba096;
+  --ink-4: #64766e;
+  --line: rgba(110,190,160,0.10);
+  --line-2: rgba(110,190,160,0.18);
 
-  /* Brand: blue → violet */
-  --brand: #5b8cff;
-  --brand-2: #8b5cf6;
+  /* Brand: esmeralda (brilhante p/ texto/ícones; profunda p/ superfícies cheias) */
+  --brand: #34d399;
+  --brand-2: #6ee7b7;
   --brand-ink: #ffffff;
-  --brand-soft: rgba(91,140,255,0.16);
-  --brand-tint: rgba(91,140,255,0.09);
-  --brand-grad: linear-gradient(120deg, #5b8cff 0%, #8b5cf6 100%);
-  --brand-glow: 0 8px 28px -8px rgba(91,140,255,0.55);
+  --brand-soft: rgba(52,211,153,0.15);
+  --brand-tint: rgba(52,211,153,0.08);
+  --brand-grad: linear-gradient(120deg, #047857 0%, #0f766e 100%);
+  --brand-glow: 0 10px 30px -10px rgba(16,185,129,0.45);
 
-  /* Semantic */
-  --success: #34d399;
-  --success-soft: rgba(52,211,153,0.16);
-  --danger: #fb7185;
-  --danger-soft: rgba(251,113,133,0.16);
+  /* Semantic — receita = teal (distinta da marca esmeralda) */
+  --success: #2dd4bf;
+  --success-soft: rgba(45,212,191,0.16);
+  --danger: #f87171;
+  --danger-soft: rgba(248,113,113,0.16);
   --warning: #fbbf24;
   --warning-soft: rgba(251,191,36,0.16);
   --info: #38bdf8;
@@ -80,36 +81,39 @@
 :root[data-theme="light"] {
   color-scheme: light;
 
-  --bg: #eef1f8;
-  --bg-2: #e6ebf6;
-  --app-grad: radial-gradient(900px 600px at 12% -8%, rgba(91,140,255,0.14), transparent 60%),
-              radial-gradient(820px 560px at 92% 4%, rgba(139,92,246,0.12), transparent 58%),
+  --bg: #eef2f0;
+  --bg-2: #e6ece9;
+  --dialog-bg: #ffffff;
+  --app-grad: radial-gradient(900px 600px at 12% -8%, rgba(16,185,129,0.12), transparent 60%),
+              radial-gradient(820px 560px at 92% 4%, rgba(13,148,136,0.10), transparent 58%),
               var(--bg);
 
-  --glass: rgba(255,255,255,0.72);
-  --glass-2: rgba(255,255,255,0.82);
-  --glass-border: rgba(15,23,42,0.08);
-  --glass-border-strong: rgba(15,23,42,0.14);
+  --glass: rgba(255,255,255,0.74);
+  --glass-2: rgba(255,255,255,0.84);
+  --glass-border: rgba(6,40,30,0.08);
+  --glass-border-strong: rgba(6,40,30,0.14);
 
-  --ink: #0d1530;
-  --ink-2: #33405f;
-  --ink-3: #5c6a8a;
-  --ink-4: #8a96b4;
-  --line: rgba(15,23,42,0.1);
-  --line-2: rgba(15,23,42,0.16);
+  --ink: #0b1a14;
+  --ink-2: #2c3d36;
+  --ink-3: #56685f;
+  --ink-4: #84968d;
+  --line: rgba(6,40,30,0.10);
+  --line-2: rgba(6,40,30,0.16);
 
-  --brand: #2f5fe0;
-  --brand-2: #7c3aed;
-  --brand-soft: rgba(47,95,224,0.1);
-  --brand-tint: rgba(47,95,224,0.06);
-  --brand-glow: 0 8px 24px -8px rgba(47,95,224,0.4);
+  --brand: #047857;
+  --brand-2: #0d9488;
+  --brand-ink: #ffffff;
+  --brand-soft: rgba(4,120,87,0.10);
+  --brand-tint: rgba(4,120,87,0.06);
+  --brand-grad: linear-gradient(120deg, #047857 0%, #0f766e 100%);
+  --brand-glow: 0 8px 24px -8px rgba(4,120,87,0.38);
 
-  --success: #0f9d63;
-  --success-soft: rgba(15,157,99,0.12);
+  --success: #0d9488;
+  --success-soft: rgba(13,148,136,0.12);
   --danger: #e11d48;
   --danger-soft: rgba(225,29,72,0.1);
-  --warning: #c2820b;
-  --warning-soft: rgba(194,130,11,0.12);
+  --warning: #b45309;
+  --warning-soft: rgba(180,83,9,0.12);
 
   --shadow-1: 0 1px 2px rgba(15,23,42,0.06);
   --shadow-2: 0 10px 30px -14px rgba(15,23,42,0.22), 0 2px 8px rgba(15,23,42,0.06);
@@ -235,6 +239,21 @@ input:focus, select:focus, textarea:focus {
 }
 :root[data-theme="light"] input, :root[data-theme="light"] select, :root[data-theme="light"] textarea { background: #fff; }
 
+/* iOS normaliza os seletores de data de forma estranha (valor centrado, chrome
+   próprio). Forçar aspeto consistente com os restantes campos. */
+input[type="date"], input[type="month"], input[type="time"] {
+  -webkit-appearance: none; appearance: none; text-align: left;
+}
+input[type="date"]::-webkit-date-and-time-value,
+input[type="month"]::-webkit-date-and-time-value,
+input[type="time"]::-webkit-date-and-time-value { text-align: left; }
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="month"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator { cursor: pointer; opacity: 0.7; }
+:root[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator,
+:root[data-theme="dark"] input[type="month"]::-webkit-calendar-picker-indicator,
+:root[data-theme="dark"] input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(1) brightness(0.9); }
+
 /* ── Lists / rows ─────────────────────────────────────────────────────── */
 .rows { display: flex; flex-direction: column; }
 .row {
@@ -271,8 +290,25 @@ input:focus, select:focus, textarea:focus {
 /* ── PrimeVue tweaks to fit the glass theme ───────────────────────────── */
 .p-button { min-height: 44px; border-radius: var(--radius-1); font-weight: 600; transition: transform var(--t-fast) var(--ease-press); }
 .p-button:active { transform: scale(0.97); }
-.p-dialog { border-radius: var(--radius-2); border: 1px solid var(--glass-border); }
-.p-dialog .p-dialog-header, .p-dialog .p-dialog-content { background: var(--glass-2); -webkit-backdrop-filter: blur(var(--glass-blur)); backdrop-filter: blur(var(--glass-blur)); }
+/* Dialog — força a identidade glass/grafite e cantos arredondados (o PrimeVue
+   injeta CSS em runtime, daí o !important + overflow para clipar os cantos). */
+.p-dialog {
+  background: var(--dialog-bg) !important;
+  border: 1px solid var(--glass-border-strong) !important;
+  border-radius: var(--radius-2) !important;
+  overflow: hidden !important;
+  box-shadow: var(--shadow-3) !important;
+}
+.p-dialog .p-dialog-header,
+.p-dialog .p-dialog-content,
+.p-dialog .p-dialog-footer {
+  background: transparent !important;
+  color: var(--ink) !important;
+  border: none !important;
+}
+.p-dialog .p-dialog-title { color: var(--ink) !important; font-family: var(--font-display); font-weight: 700; }
+.p-dialog .p-dialog-header-actions .p-button,
+.p-dialog .p-dialog-header .p-dialog-close-button { color: var(--ink-3) !important; }
 .p-toast { font-family: var(--font-sans); }
 
 /* Scrollbar */
