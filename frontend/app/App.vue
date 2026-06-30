@@ -69,6 +69,9 @@ onMounted(async () => {
   await loadUser();
   if (user.value) { loadCategories(); syncOutbox(); }
   window.addEventListener('online', syncOutbox);
+  window.addEventListener('focus', syncOutbox);
+  // iOS não tem background sync — sincroniza ao voltar a app para 1º plano.
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') syncOutbox(); });
 });
 </script>
 

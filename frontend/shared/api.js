@@ -15,6 +15,7 @@ const api = axios.create({
 });
 
 let globalErrorHandler = null;
+let lastNetToastTs = 0;
 export function setApiErrorHandler(fn) { globalErrorHandler = fn; }
 
 // Map the API's short error codes ({ error: 'invalid' }) to friendly PT copy.
@@ -70,7 +71,18 @@ api.interceptors.response.use(
       return Promise.resolve({ queued: true });
     }
     const silent = err.config && err.config.silent;
-    if (!silent && norm.status !== 401 && globalErrorHandler) globalErrorHandler(norm);
+    if (!silent && norm.status !== 401 && globalErrorHandler) {
+      if (norm.status === 0) {
+        // Erro de rede: nada de toast quando o dispositivo está offline (o
+        // utilizador sabe); se estiver "online" mas o servidor falhar, mostra
+        // no máximo 1 a cada 5s para não encher o ecrã com pedidos paralelos.
+        const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
+        const now = Date.now();
+        if (!isOffline && now - lastNetToastTs > 5000) { lastNetToastTs = now; globalErrorHandler(norm); }
+      } else {
+        globalErrorHandler(norm);
+      }
+    }
     return Promise.reject(norm);
   }
 );
