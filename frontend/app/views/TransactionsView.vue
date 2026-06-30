@@ -1,5 +1,6 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue';
+import { useRoute } from 'vue-router';
 import { useConfirm } from 'primevue/useconfirm';
 import { useToast } from 'primevue/usetoast';
 import Dialog from 'primevue/dialog';
@@ -21,9 +22,13 @@ const totalPages = ref(1);
 const total = ref(0);
 const sums = ref({ income: 0, expense: 0 });
 
+const route = useRoute();
 const q = ref('');
 const type = ref('');       // '' | 'income' | 'expense'
 const filterCat = ref('');
+const fromDate = ref('');
+const toDate = ref('');
+const onlyUncat = ref(false);
 const dlg = ref(false);
 const editing = ref(null);
 let searchTimer = null;
@@ -38,9 +43,12 @@ async function load(reset = true, silent = false) {
   else { loadingMore.value = true; }
   try {
     const params = { page: page.value, per_page: 20 };
-    if (filterCat.value) params.category_id = filterCat.value;
+    if (onlyUncat.value) params.uncategorized = 1;
+    else if (filterCat.value) params.category_id = filterCat.value;
     if (type.value) params.type = type.value;
     if (q.value.trim()) params.q = q.value.trim();
+    if (fromDate.value) params.from = fromDate.value;
+    if (toDate.value) params.to = toDate.value;
     const res = await api.get('/transactions', { params });
     items.value = reset ? res.items : [...items.value, ...res.items];
     totalPages.value = res.total_pages;
@@ -52,10 +60,21 @@ async function load(reset = true, silent = false) {
 function applyFilters() { load(true); }
 function onSearch() { clearTimeout(searchTimer); searchTimer = setTimeout(() => load(true), 300); }
 function setType(t) { type.value = t; load(true); }
+function toggleUncat() { onlyUncat.value = !onlyUncat.value; if (onlyUncat.value) filterCat.value = ''; load(true); }
 function more() { if (page.value < totalPages.value) { page.value++; load(false); } }
+
+async function assignCategory(t, catId) {
+  try {
+    await api.put(`/transactions/${t.id}/category`, { category_id: catId || null });
+    toast.add({ severity: 'success', summary: 'Categorizado', life: 1400 });
+    await load(true, true);
+    window.dispatchEvent(new CustomEvent('financeiro:tx-changed'));
+  } catch (e) { /* */ }
+}
 
 const onExternalChange = () => { load(true, true).catch(() => {}); };
 onMounted(async () => {
+  if (route.query.uncat === '1') onlyUncat.value = true;
   await Promise.all([loadCats(), load()]);
   window.addEventListener('financeiro:tx-changed', onExternalChange);
 });
@@ -90,10 +109,13 @@ function doExport() {
   window.open(url, '_blank');
   exportDlg.value = false;
 }
+function exportCsv() { window.open('/api/export/transactions.csv', '_blank'); exportDlg.value = false; }
+function exportBackup() { window.open('/api/export/backup.json', '_blank'); exportDlg.value = false; }
 
 const net = computed(() => sums.value.income - sums.value.expense);
-const hasFilters = computed(() => !!(q.value.trim() || type.value || filterCat.value));
-function clearFilters() { q.value = ''; type.value = ''; filterCat.value = ''; load(true); }
+const hasFilters = computed(() => !!(q.value.trim() || type.value || filterCat.value || fromDate.value || toDate.value || onlyUncat.value));
+function clearFilters() { q.value = ''; type.value = ''; filterCat.value = ''; fromDate.value = ''; toDate.value = ''; onlyUncat.value = false; load(true); }
+const catsFor = (t) => categories.value.filter((c) => c.tipo === (t === 'income' ? 'income' : 'expense'));
 
 // Agrupar por dia, com total do dia.
 const groups = computed(() => {
@@ -138,10 +160,16 @@ const groups = computed(() => {
         <button class="fchip" :class="{ on: type === '' }" @click="setType('')">Todos</button>
         <button class="fchip" :class="{ on: type === 'income' }" @click="setType('income')">Receitas</button>
         <button class="fchip" :class="{ on: type === 'expense' }" @click="setType('expense')">Despesas</button>
-        <select class="fcat" v-model="filterCat" @change="applyFilters">
+        <button class="fchip uncat" :class="{ on: onlyUncat }" @click="toggleUncat"><i class="pi pi-tag" /> Por categorizar</button>
+        <select class="fcat" v-model="filterCat" @change="applyFilters" :disabled="onlyUncat">
           <option value="">Todas as categorias</option>
           <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.nome }}</option>
         </select>
+      </div>
+      <div class="dates">
+        <label><span>De</span><input v-model="fromDate" type="date" @change="applyFilters" /></label>
+        <label><span>Até</span><input v-model="toDate" type="date" @change="applyFilters" /></label>
+        <button v-if="hasFilters" class="btn btn-sm btn-ghost" @click="clearFilters"><i class="pi pi-filter-slash" /> Limpar</button>
       </div>
     </section>
 
@@ -170,7 +198,11 @@ const groups = computed(() => {
               </div>
             </div>
             <div class="row-amount" :class="t.tipo === 'income' ? 'pos' : 'neg'">{{ t.tipo === 'income' ? '+' : '−' }}{{ fmtEurCents(t.valor) }}</div>
-            <button class="icon-btn danger" @click="remove(t)" aria-label="Eliminar"><i class="pi pi-trash" /></button>
+            <select v-if="onlyUncat" class="cat-pick" @change="assignCategory(t, $event.target.value)" @click.stop>
+              <option value="" selected disabled>Categoria…</option>
+              <option v-for="c in catsFor(t.tipo)" :key="c.id" :value="c.id">{{ c.nome }}</option>
+            </select>
+            <button v-else class="icon-btn danger" @click="remove(t)" aria-label="Eliminar"><i class="pi pi-trash" /></button>
           </div>
         </div>
       </section>
@@ -191,6 +223,9 @@ const groups = computed(() => {
         <label v-if="exportPeriod === 'month'" class="field"><span>Mês (ciclo)</span><input v-model="exportMonth" type="month" /></label>
         <label v-else class="field"><span>Ano (civil)</span><input v-model.number="exportYear" type="number" min="2000" max="2100" /></label>
         <button class="btn btn-primary btn-block" @click="doExport"><i class="pi pi-download" /> Exportar Excel</button>
+        <div class="exp-sep">ou exporta tudo</div>
+        <button class="btn btn-sm btn-block" @click="exportCsv"><i class="pi pi-file" /> Todos os movimentos (CSV)</button>
+        <button class="btn btn-sm btn-block" @click="exportBackup"><i class="pi pi-database" /> Backup completo (JSON)</button>
       </div>
     </Dialog>
   </div>
@@ -198,6 +233,7 @@ const groups = computed(() => {
 
 <style scoped>
 .head-actions { display: flex; gap: 0.5rem; }
+.exp-sep { text-align: center; font-size: 0.74rem; color: var(--ink-4); margin: 0.3rem 0 -0.2rem; }
 .totals { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; padding: 0.9rem 1rem; }
 .t { display: flex; flex-direction: column; gap: 0.2rem; align-items: center; }
 .t-l { font-size: 0.72rem; color: var(--ink-3); font-weight: 600; }
@@ -216,6 +252,11 @@ const groups = computed(() => {
 }
 .fchip.on { background: var(--brand-soft); border-color: var(--brand); color: var(--brand); }
 .fcat { width: auto; flex: 1; min-width: 150px; min-height: 40px; padding: 0.45rem 0.7rem; }
+.fchip.uncat.on { background: var(--warning-soft); border-color: var(--warning); color: var(--warning); }
+.dates { display: flex; align-items: flex-end; gap: 0.5rem; flex-wrap: wrap; }
+.dates label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.74rem; color: var(--ink-3); font-weight: 600; }
+.dates input { min-height: 40px; padding: 0.4rem 0.6rem; }
+.cat-pick { width: auto; min-width: 130px; min-height: 36px; padding: 0.35rem 0.5rem; font-size: 0.82rem; }
 
 .group { padding: 0.4rem 1rem 0.5rem; }
 .group-head { display: flex; align-items: center; justify-content: space-between; padding: 0.6rem 0.2rem 0.3rem; }

@@ -89,14 +89,14 @@ async function saveSpend() {
   if (!spendForm.value.amount || spendForm.value.amount <= 0) { toast.add({ severity: 'warn', summary: 'Indica o valor', life: 2500 }); return; }
   busy.value = true;
   try {
-    await api.post(`/goals/${spendForm.value.goal_id}/spend`, {
+    const res = await api.post(`/goals/${spendForm.value.goal_id}/spend`, {
       amount: spendForm.value.amount,
       date: spendForm.value.date,
       category_id: spendForm.value.category_id || null,
       account_id: spendForm.value.account_id || null,
       description: spendForm.value.description || null,
     });
-    toast.add({ severity: 'success', summary: 'Despesa criada', detail: 'Gasto do objetivo registado.', life: 2800 });
+    toast.add({ severity: 'success', summary: 'Despesa criada', detail: res && res.archived ? 'Objetivo gasto e arquivado.' : 'Gasto do objetivo registado.', life: 2800 });
     spendDlg.value = false;
     await load(true);
     window.dispatchEvent(new CustomEvent('financeiro:tx-changed'));
@@ -108,6 +108,12 @@ const view = computed(() => goals.value.map((g) => {
   const allocated = Number(g.total_alocado || 0);
   return { ...g, target, allocated, percent: target > 0 ? Math.min(100, Math.round((allocated / target) * 100)) : 0 };
 }));
+const activeGoals = computed(() => view.value.filter((g) => g.estado !== 'archived'));
+const archivedGoals = computed(() => view.value.filter((g) => g.estado === 'archived'));
+
+async function unarchive(g) {
+  try { await api.post(`/goals/${g.id}/unarchive`); toast.add({ severity: 'success', summary: 'Reativado', life: 2000 }); await load(true); } catch (e) { /* */ }
+}
 
 function addGoal() { editingGoal.value = null; goalForm.value = { name: '', target_amount: null, target_date: '' }; goalDlg.value = true; }
 function editGoal(g) { editingGoal.value = g; goalForm.value = { name: g.nome, target_amount: Number(g.valor_objetivo), target_date: g.data_objetivo ? String(g.data_objetivo).slice(0, 10) : '' }; goalDlg.value = true; }
@@ -155,9 +161,9 @@ async function saveAllocation() {
     </div>
 
     <div v-if="loading" class="loading"><ProgressSpinner style="width:40px;height:40px" strokeWidth="4" /></div>
-    <div v-else-if="!view.length" class="surface card empty"><i class="pi pi-flag" />Ainda não tens objetivos.</div>
-    <div v-else class="goals-grid">
-      <section v-for="g in view" :key="g.id" class="surface card goal" :class="{ done: g.percent >= 100 }">
+    <div v-else-if="!activeGoals.length && !archivedGoals.length" class="surface card empty"><i class="pi pi-flag" />Ainda não tens objetivos.</div>
+    <div v-else-if="activeGoals.length" class="goals-grid">
+      <section v-for="g in activeGoals" :key="g.id" class="surface card goal" :class="{ done: g.percent >= 100 }">
         <div class="goal-head">
           <div><h2>{{ g.nome }}</h2><span v-if="g.data_objetivo" class="muted tiny">até {{ fmtDate(g.data_objetivo) }}</span></div>
           <div class="goal-acts">
@@ -176,6 +182,17 @@ async function saveAllocation() {
         </div>
       </section>
     </div>
+
+    <section v-if="archivedGoals.length" class="surface card">
+      <div class="card-head"><h2>Arquivados</h2><span class="muted tiny">objetivos já gastos</span></div>
+      <div class="rows">
+        <div v-for="g in archivedGoals" :key="g.id" class="row">
+          <div class="row-main"><div class="row-title">{{ g.nome }}</div><div class="row-sub">objetivo de {{ fmtEurCents(g.target) }} · cumprido e gasto</div></div>
+          <button class="btn btn-sm" @click="unarchive(g)"><i class="pi pi-replay" /> Reativar</button>
+          <button class="icon-btn danger" @click="removeGoal(g)" aria-label="Eliminar"><i class="pi pi-trash" /></button>
+        </div>
+      </div>
+    </section>
 
     <section v-if="allocations.length" class="surface card">
       <div class="card-head"><h2>Alocações recentes</h2></div>

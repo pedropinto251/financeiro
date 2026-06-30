@@ -41,10 +41,11 @@ async function listRecentTransactions(groupId, limit = 20) {
 }
 
 // Shared WHERE builder for the movimentos list/count/summary (aliased `t`).
-function buildTxFilter({ groupId, categoryId, type, q, fromDate, toDate }) {
+function buildTxFilter({ groupId, categoryId, type, q, fromDate, toDate, uncategorized }) {
   const params = [groupId];
   let where = "t.finance_group_id = ? AND t.status = 'active'";
-  if (categoryId) { where += ' AND t.categoria_id = ?'; params.push(categoryId); }
+  if (uncategorized) { where += ' AND t.categoria_id IS NULL'; }
+  else if (categoryId) { where += ' AND t.categoria_id = ?'; params.push(categoryId); }
   if (type === 'income' || type === 'expense') { where += ' AND t.tipo = ?'; params.push(type); }
   if (q) { where += ' AND (t.descricao LIKE ? OR t.fonte LIKE ?)'; params.push(`%${q}%`, `%${q}%`); }
   if (fromDate) { where += ' AND t.data_ocorrencia >= ?'; params.push(fromDate); }
@@ -155,6 +156,13 @@ async function getYearSummary(groupId, yearStart, yearEnd) {
     [groupId, yearStart, yearEnd]
   );
   return rows[0] || { total_income: 0, total_expense: 0 };
+}
+
+async function updateTransactionCategory(groupId, id, categoryId) {
+  await pool.query(
+    'UPDATE finance_transactions SET categoria_id = ? WHERE finance_group_id = ? AND id = ?',
+    [categoryId || null, groupId, id]
+  );
 }
 
 async function getLastTransactionDate(groupId) {
@@ -270,6 +278,7 @@ module.exports = {
   getYearSummary,
   getTotalSummary,
   getLastTransactionDate,
+  updateTransactionCategory,
   getExpenseByCategory,
   getCategoryBreakdown,
   getTransactionsSummary,

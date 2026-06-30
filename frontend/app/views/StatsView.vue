@@ -1,8 +1,12 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue';
+import { useRouter } from 'vue-router';
 import ProgressSpinner from 'primevue/progressspinner';
 import api from '@shared/api';
 import { fmtEur, fmtEurCents, fmtDateShort } from '@shared/format';
+
+const router = useRouter();
+function goCategorize() { router.push({ path: '/movimentos', query: { uncat: '1' } }); }
 
 const series = ref([]);
 const detail = ref(null);
@@ -262,7 +266,7 @@ const highlights = computed(() => {
             <div v-else class="ccmps">
               <div v-for="c in cmpCats" :key="c.nome" class="ccmp" :class="{ uncat: c.nome === 'Sem categoria' }">
                 <div class="ccmp-top">
-                  <span class="ccmp-name"><i v-if="c.nome === 'Sem categoria'" class="pi pi-exclamation-circle" /> {{ c.nome }}</span>
+                  <span class="ccmp-name"><i v-if="c.nome === 'Sem categoria'" class="pi pi-exclamation-circle" /> {{ c.nome }}<button v-if="c.nome === 'Sem categoria'" class="catz" @click="goCategorize">categorizar →</button></span>
                   <span class="ccmp-diff" :class="c.b > c.a ? 'neg' : (c.b < c.a ? 'pos' : 'muted')">{{ c.b === c.a ? '=' : (c.b > c.a ? '+' : '−') + fmtEur(Math.abs(c.b - c.a)) }}</span>
                 </div>
                 <div class="ccmp-row"><div class="pbar"><span class="pa" :style="{ width: barPct(c.a, catMax) + '%' }" /></div><span class="pv">{{ fmtEur(c.a) }}</span></div>
@@ -372,6 +376,7 @@ const highlights = computed(() => {
 .ccmp-top { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; margin-bottom: 0.45rem; }
 .ccmp-name { font-size: 0.9rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.35rem; }
 .ccmp.uncat .ccmp-name { color: var(--warning); }
+.catz { margin-left: 0.5rem; border: none; background: var(--warning-soft); color: var(--warning); font-weight: 700; font-size: 0.7rem; padding: 0.12rem 0.5rem; border-radius: var(--radius-pill); cursor: pointer; font-family: inherit; }
 .ccmp-diff { font-size: 0.8rem; font-weight: 700; white-space: nowrap; }
 .ccmp-diff.muted { color: var(--ink-4); }
 .ccmp-row { display: flex; align-items: center; gap: 0.6rem; margin-top: 0.3rem; }

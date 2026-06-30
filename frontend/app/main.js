@@ -6,6 +6,7 @@ import ToastService from 'primevue/toastservice';
 import ConfirmationService from 'primevue/confirmationservice';
 import 'primeicons/primeicons.css';
 import '@shared/style.css';
+import '@shared/pwa'; // regista cedo o listener de beforeinstallprompt
 
 import App from './App.vue';
 import router from './router';

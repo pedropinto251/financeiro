@@ -5,6 +5,7 @@ import api from '@shared/api';
 import { useUser } from '../lib/useUser';
 import { useTheme } from '@shared/useTheme';
 import { pushSupported, isStandalone, isPushEnabled, enablePush, disablePush, testPush } from '@shared/push';
+import { canInstall, promptInstall, isStandalonePwa } from '@shared/pwa';
 
 const toast = useToast();
 const { user, load } = useUser();
@@ -38,6 +39,9 @@ async function toggleNotif() {
     toast.add({ severity: 'warn', summary: 'Notificações', detail: msg, life: 4000 });
   } finally { notifBusy.value = false; }
 }
+const installed = isStandalonePwa();
+async function doInstall() { await promptInstall(); }
+
 async function doTestNotif() {
   notifBusy.value = true;
   try { const r = await testPush(); toast.add({ severity: r.sent ? 'success' : 'warn', summary: r.sent ? 'Enviada 📨' : 'Sem dispositivos', life: 3000 }); }
@@ -153,6 +157,16 @@ async function save() {
       <button class="btn btn-primary btn-block" :disabled="savingBusy" @click="saveSavings">
         <i v-if="savingBusy" class="pi pi-spin pi-spinner" /> Guardar meta
       </button>
+    </section>
+
+    <section class="surface card">
+      <div class="card-head"><h2><i class="pi pi-mobile" /> App</h2></div>
+      <div v-if="installed" class="muted tiny"><i class="pi pi-check-circle" style="color:var(--success)" /> App instalada neste dispositivo.</div>
+      <template v-else>
+        <p class="muted intro">Instala a app para abrir do ecrã principal, funcionar offline e receber notificações.</p>
+        <button v-if="canInstall" class="btn btn-primary btn-block" @click="doInstall"><i class="pi pi-download" /> Instalar app</button>
+        <p v-else class="muted tiny ios-hint"><i class="pi pi-info-circle" /> No iPhone: <strong>Partilhar → "Adicionar ao ecrã principal"</strong>. No Android/desktop, o botão de instalar aparece aqui quando o navegador o permite.</p>
+      </template>
     </section>
 
     <section class="surface card">
