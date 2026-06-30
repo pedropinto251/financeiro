@@ -7,6 +7,7 @@ import ConfirmDialog from 'primevue/confirmdialog';
 import api, { setApiErrorHandler } from '@shared/api';
 import { useUser } from './lib/useUser';
 import { useTheme } from '@shared/useTheme';
+import { flush as flushOutbox, pending as outboxPending } from '@shared/outbox';
 import TransactionDialog from './components/TransactionDialog.vue';
 
 const toast = useToast();
@@ -28,6 +29,16 @@ async function loadCategories() {
 function onTxSaved() {
   // Let any open view refresh itself.
   window.dispatchEvent(new CustomEvent('financeiro:tx-changed'));
+}
+
+async function syncOutbox() {
+  try {
+    const n = await flushOutbox(api);
+    if (n > 0) {
+      toast.add({ severity: 'success', summary: `${n} movimento(s) sincronizado(s)`, life: 3000 });
+      window.dispatchEvent(new CustomEvent('financeiro:tx-changed'));
+    }
+  } catch (e) { /* */ }
 }
 
 const NAV = [
@@ -56,7 +67,8 @@ onMounted(async () => {
     toast.add({ severity: 'error', summary: 'Erro', detail: err.message, life: 5000 });
   });
   await loadUser();
-  if (user.value) loadCategories();
+  if (user.value) { loadCategories(); syncOutbox(); }
+  window.addEventListener('online', syncOutbox);
 });
 </script>
 
@@ -72,6 +84,9 @@ onMounted(async () => {
         <img src="/icon.svg" alt="" class="brand-logo" /><span>Financeiro</span>
       </RouterLink>
       <span class="spacer" />
+      <button v-if="outboxPending > 0" class="sync-chip" @click="syncOutbox" title="Sincronizar pendentes">
+        <i class="pi pi-cloud-upload" /> {{ outboxPending }}
+      </button>
       <button class="icon-btn" @click="toggleTheme" :aria-label="theme === 'dark' ? 'Tema claro' : 'Tema escuro'">
         <i :class="theme === 'dark' ? 'pi pi-sun' : 'pi pi-moon'" />
       </button>
@@ -88,6 +103,9 @@ onMounted(async () => {
         </RouterLink>
       </nav>
       <div class="sidebar-foot">
+        <button v-if="outboxPending > 0" class="nav-item" @click="syncOutbox">
+          <i class="pi pi-cloud-upload" /><span>Sincronizar ({{ outboxPending }})</span>
+        </button>
         <button class="nav-item" @click="toggleTheme">
           <i :class="theme === 'dark' ? 'pi pi-sun' : 'pi pi-moon'" /><span>{{ theme === 'dark' ? 'Tema claro' : 'Tema escuro' }}</span>
         </button>
@@ -135,6 +153,7 @@ onMounted(async () => {
 .brand { display: inline-flex; align-items: center; gap: 0.55rem; font-family: var(--font-display); font-weight: 700; font-size: 1.05rem; color: var(--ink); letter-spacing: -0.02em; }
 .brand-logo { height: 28px; width: 28px; display: block; }
 .spacer { flex: 1; }
+.sync-chip { display: inline-flex; align-items: center; gap: 0.35rem; border: none; background: var(--warning-soft); color: var(--warning); font-weight: 700; font-size: 0.8rem; padding: 0.3rem 0.6rem; border-radius: var(--radius-pill); cursor: pointer; font-family: inherit; }
 
 .sidebar {
   position: fixed; top: 0; left: 0; bottom: 0; width: 268px; z-index: 50;

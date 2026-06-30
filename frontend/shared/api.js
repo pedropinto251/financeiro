@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { enqueue } from './outbox';
 
 // Single axios instance for the whole SPA.
 //  - baseURL '/api' (same origin as the Express app on the subdomain)
@@ -58,6 +59,15 @@ api.interceptors.response.use(
     } else if (err.code === 'ECONNABORTED') {
       norm.code = 'timeout';
       norm.message = 'O pedido demorou demasiado. Tenta novamente.';
+    }
+    // Sem rede + pedido marcado offlineQueue → guarda na outbox e resolve otimista.
+    const cfg = err.config || {};
+    if (norm.status === 0 && cfg.offlineQueue) {
+      try {
+        const data = cfg.data ? (typeof cfg.data === 'string' ? JSON.parse(cfg.data) : cfg.data) : undefined;
+        enqueue({ method: cfg.method || 'post', url: cfg.url, data });
+      } catch (e) { /* */ }
+      return Promise.resolve({ queued: true });
     }
     const silent = err.config && err.config.silent;
     if (!silent && norm.status !== 401 && globalErrorHandler) globalErrorHandler(norm);

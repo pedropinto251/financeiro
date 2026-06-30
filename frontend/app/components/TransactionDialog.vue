@@ -68,7 +68,15 @@ async function save() {
       await api.put(`/transactions/${props.transaction.id}`, payload);
       id = props.transaction.id;
     } else {
-      const res = await api.post('/transactions', payload);
+      // offlineQueue: se não houver rede, fica guardado e sincroniza depois.
+      const res = await api.post('/transactions', payload, { offlineQueue: true });
+      if (res && res.queued) {
+        toast.add({ severity: 'info', summary: 'Guardado offline', detail: 'Sincroniza assim que houver rede.', life: 3800 });
+        emit('saved');
+        close();
+        busy.value = false;
+        return;
+      }
       id = res.id;
     }
     if (file.value && id) {
