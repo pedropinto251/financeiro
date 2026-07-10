@@ -159,19 +159,60 @@ async function getExpenseByCategory(groupId, monthStart, monthEnd) {
 }
 
 // Detalhe por categoria (despesa + receita) num intervalo — para estatísticas.
-async function getCategoryBreakdown(groupId, start, end) {
+// onlyMain: exclui contas restritas (include_in_total=0, ex.: cartão refeição)
+// para que "Onde gastaste" reflita só o dinheiro real.
+async function getCategoryBreakdown(groupId, start, end, { onlyMain = false } = {}) {
+  const restrict = onlyMain && accountsHaveColumn()
+    ? 'AND COALESCE(a.include_in_total, 1) = 1'
+    : '';
+  const join = onlyMain && accountsHaveColumn()
+    ? 'LEFT JOIN finance_accounts a ON a.id = t.account_id'
+    : '';
   const [rows] = await pool.query(
     `SELECT t.categoria_id, COALESCE(c.nome, 'Sem categoria') AS nome, c.tipo,
         SUM(CASE WHEN t.tipo = 'expense' THEN t.valor ELSE 0 END) AS expense,
         SUM(CASE WHEN t.tipo = 'income' THEN t.valor ELSE 0 END) AS income
      FROM finance_transactions t
      LEFT JOIN finance_categories c ON c.id = t.categoria_id
+     ${join}
      WHERE t.finance_group_id = ? AND t.status = 'active'
        AND t.data_ocorrencia BETWEEN ? AND ?
+       ${restrict}
      GROUP BY t.categoria_id, nome, c.tipo`,
     [groupId, start, end]
   );
   return rows;
+}
+
+// Resumo do ciclo separado por tipo de conta: `main` (contas reais, incluídas no
+// total, + movimentos sem conta) vs `restricted` (cartão refeição / contas
+// separadas). Assim a poupança "real" não é inflacionada pelo carregamento do
+// cartão. Se a coluna de contas não existir, tudo cai em `main`.
+async function getMonthlySummarySplit(groupId, start, end) {
+  const empty = () => ({ income: 0, expense: 0 });
+  if (!accountsHaveColumn()) {
+    const s = await getMonthlySummary(groupId, start, end);
+    return { main: { income: Number(s.total_income || 0), expense: Number(s.total_expense || 0) }, restricted: empty() };
+  }
+  const [rows] = await pool.query(
+    `SELECT COALESCE(a.include_in_total, 1) AS inc,
+        SUM(CASE WHEN t.tipo = 'income' THEN t.valor ELSE 0 END) AS income,
+        SUM(CASE WHEN t.tipo = 'expense' THEN t.valor ELSE 0 END) AS expense
+     FROM finance_transactions t
+     LEFT JOIN finance_accounts a ON a.id = t.account_id
+     WHERE t.finance_group_id = ? AND t.status = 'active'
+       AND t.data_ocorrencia BETWEEN ? AND ?
+     GROUP BY COALESCE(a.include_in_total, 1)`,
+    [groupId, start, end]
+  );
+  const main = empty();
+  const restricted = empty();
+  for (const r of rows) {
+    const bucket = Number(r.inc) === 0 ? restricted : main;
+    bucket.income += Number(r.income || 0);
+    bucket.expense += Number(r.expense || 0);
+  }
+  return { main, restricted };
 }
 
 async function getYearSummary(groupId, yearStart, yearEnd) {
@@ -228,7 +269,7 @@ async function getMonthlySeries(groupId, fromDate, toDate) {
   return rows;
 }
 
-async function listTransactionsForReport({ groupId, fromDate, toDate, type }) {
+async function listTransactionsForReport({ groupId, fromDate, toDate, type, onlyMain = false }) {
   const params = [groupId];
   let where = 't.finance_group_id = ? AND t.status = \'active\'';
   if (type) {
@@ -243,11 +284,15 @@ async function listTransactionsForReport({ groupId, fromDate, toDate, type }) {
     where += ' AND t.data_ocorrencia <= ?';
     params.push(toDate);
   }
+  const withAcc = onlyMain && accountsHaveColumn();
+  const join = withAcc ? 'LEFT JOIN finance_accounts a ON a.id = t.account_id' : '';
+  if (withAcc) where += ' AND COALESCE(a.include_in_total, 1) = 1';
   const [rows] = await pool.query(
     `SELECT t.id, t.tipo, t.valor, t.data_ocorrencia, t.descricao, t.fonte,
         c.nome AS categoria_nome
      FROM finance_transactions t
      LEFT JOIN finance_categories c ON c.id = t.categoria_id
+     ${join}
      WHERE ${where}
      ORDER BY t.data_ocorrencia DESC, t.id DESC`,
     params
@@ -303,6 +348,7 @@ module.exports = {
   listTransactions,
   countTransactions,
   getMonthlySummary,
+  getMonthlySummarySplit,
   getYearSummary,
   getTotalSummary,
   getLastTransactionDate,

@@ -67,6 +67,15 @@ const cats = computed(() => {
   const total = list.reduce((a, c) => a + c.expense, 0) || 1;
   return list.map((c, i) => ({ ...c, pct: Math.round((c.expense / total) * 100), color: DONUT[i % DONUT.length] }));
 });
+// Cartão / conta separada (include_in_total=0) — mostrado à parte para não
+// inflacionar a poupança. null quando não houve movimento no ciclo.
+const restricted = computed(() => {
+  const r = detail.value?.restricted;
+  if (!r) return null;
+  const income = Number(r.income || 0), expense = Number(r.expense || 0);
+  if (income === 0 && expense === 0) return null;
+  return { income, expense, saldo: Number(r.saldo ?? income - expense) };
+});
 const savedDelta = computed(() => detail.value ? detail.value.summary.saved - Number(detail.value.prev?.saved || 0) : 0);
 const expenseDelta = computed(() => detail.value ? detail.value.summary.expense - Number(detail.value.prev?.expense || 0) : 0);
 const canPrev = computed(() => selected.value < (series.value.length - 1));
@@ -186,7 +195,17 @@ const highlights = computed(() => {
               <span :class="expenseDelta <= 0 ? 'pos' : 'neg'"><i :class="expenseDelta <= 0 ? 'pi pi-arrow-down' : 'pi pi-arrow-up'" /> Gastos {{ expenseDelta >= 0 ? '+' : '−' }}{{ fmtEur(Math.abs(expenseDelta)) }}</span>
               <span class="muted tiny">vs ciclo anterior</span>
             </div>
+            <p v-if="restricted" class="muted tiny note"><i class="pi pi-info-circle" /> Valores só das contas reais — o cartão de alimentação está à parte, em baixo.</p>
           </template>
+        </section>
+
+        <section v-if="restricted && !loadingDetail" class="surface card mealcard">
+          <div class="card-head"><h2><i class="pi pi-wallet" /> Cartão / conta separada</h2><span class="muted tiny">fora da poupança</span></div>
+          <div class="kpis three">
+            <div class="k"><span class="k-l">Carregado</span><span class="k-v pos">{{ fmtEurCents(restricted.income) }}</span></div>
+            <div class="k"><span class="k-l">Gasto</span><span class="k-v neg">{{ fmtEurCents(restricted.expense) }}</span></div>
+            <div class="k"><span class="k-l">Saldo do período</span><span class="k-v" :class="restricted.saldo >= 0 ? 'pos' : 'neg'">{{ fmtEurCents(restricted.saldo) }}</span></div>
+          </div>
         </section>
 
         <section v-if="detail && !loadingDetail" class="surface card">
@@ -329,6 +348,11 @@ const highlights = computed(() => {
 
 .kpis { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.6rem; }
 @media (min-width: 560px) { .kpis { grid-template-columns: repeat(4, 1fr); } }
+.kpis.three { grid-template-columns: repeat(3, 1fr); }
+.note { display: flex; align-items: center; gap: 0.35rem; margin: 0.7rem 0 0; }
+.note i { color: var(--brand); }
+.mealcard .card-head h2 { display: inline-flex; align-items: center; gap: 0.45rem; }
+.mealcard .card-head h2 i { color: var(--brand); }
 .k { display: flex; flex-direction: column; gap: 0.2rem; padding: 0.6rem 0.7rem; border-radius: 12px; background: var(--bg-2); }
 .k-l { font-size: 0.72rem; color: var(--ink-3); font-weight: 600; }
 .k-v { font-family: var(--font-display); font-weight: 700; font-size: 1.1rem; }

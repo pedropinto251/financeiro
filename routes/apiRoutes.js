@@ -16,6 +16,7 @@ const {
   countTransactions,
   createTransaction,
   getMonthlySummary,
+  getMonthlySummarySplit,
   getYearSummary,
   getExpenseByCategory,
   getTotalSummary,
@@ -971,10 +972,11 @@ router.get('/stats/series', apiAuth, async (req, res) => {
     const { cycleDay, adjustWeekend } = getUserCycleSettings(req.user);
     const n = Math.min(24, Math.max(3, Number(req.query.n) || 12));
     const cycles = buildCyclesBack(new Date(), cycleDay, adjustWeekend, n);
-    const sums = await Promise.all(cycles.map((c) => getMonthlySummary(groupId, formatDate(c.start), formatDate(c.end))));
+    // Só contas reais contam para a poupança do gráfico (cartão refeição fora).
+    const sums = await Promise.all(cycles.map((c) => getMonthlySummarySplit(groupId, formatDate(c.start), formatDate(c.end))));
     const out = cycles.map((c, i) => {
-      const income = Number(sums[i].total_income || 0);
-      const expense = Number(sums[i].total_expense || 0);
+      const income = Number(sums[i].main.income || 0);
+      const expense = Number(sums[i].main.expense || 0);
       return { offset: cycles.length - 1 - i, label: cycleLabel(c), start: formatDate(c.start), end: formatDate(c.end), income, expense, saved: income - expense };
     });
     return res.json({ cycles: out });
@@ -999,15 +1001,16 @@ router.get('/stats/cycle', apiAuth, async (req, res) => {
     const prevRef = new Date(cur.start.getFullYear(), cur.start.getMonth(), cur.start.getDate() - 1);
     const prev = getCyclePeriod(prevRef, cycleDay, adjustWeekend);
     const [sum, prevSum, breakdown, expenseTx] = await Promise.all([
-      getMonthlySummary(groupId, formatDate(cur.start), formatDate(cur.end)),
-      getMonthlySummary(groupId, formatDate(prev.start), formatDate(prev.end)),
-      getCategoryBreakdown(groupId, formatDate(cur.start), formatDate(cur.end)),
-      listTransactionsForReport({ groupId, fromDate: formatDate(cur.start), toDate: formatDate(cur.end), type: 'expense' }),
+      getMonthlySummarySplit(groupId, formatDate(cur.start), formatDate(cur.end)),
+      getMonthlySummarySplit(groupId, formatDate(prev.start), formatDate(prev.end)),
+      getCategoryBreakdown(groupId, formatDate(cur.start), formatDate(cur.end), { onlyMain: true }),
+      listTransactionsForReport({ groupId, fromDate: formatDate(cur.start), toDate: formatDate(cur.end), type: 'expense', onlyMain: true }),
     ]);
-    const income = Number(sum.total_income || 0);
-    const expense = Number(sum.total_expense || 0);
-    const prevExpense = Number(prevSum.total_expense || 0);
-    const prevSaved = Number(prevSum.total_income || 0) - prevExpense;
+    // KPIs e poupança contam só as contas reais; o cartão vai à parte (restricted).
+    const income = Number(sum.main.income || 0);
+    const expense = Number(sum.main.expense || 0);
+    const prevExpense = Number(prevSum.main.expense || 0);
+    const prevSaved = Number(prevSum.main.income || 0) - prevExpense;
     const byCategory = breakdown
       .map((r) => ({ nome: r.nome, tipo: r.tipo, expense: Number(r.expense || 0), income: Number(r.income || 0) }))
       .filter((r) => r.expense > 0)
@@ -1027,6 +1030,11 @@ router.get('/stats/cycle', apiAuth, async (req, res) => {
         biggest: sorted.length ? sorted[0].valor : 0,
       },
       prev: { saved: prevSaved, expense: prevExpense },
+      restricted: {
+        income: Number(sum.restricted.income || 0),
+        expense: Number(sum.restricted.expense || 0),
+        saldo: Number(sum.restricted.income || 0) - Number(sum.restricted.expense || 0),
+      },
       byCategory,
       topExpenses,
     });
