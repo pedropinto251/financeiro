@@ -73,6 +73,7 @@ const {
   countDue,
   nextOccurrence,
   firstOccurrence,
+  normalizeDia,
 } = require('../models/financeRecurringModel');
 
 function formatDate(date) {
@@ -739,7 +740,7 @@ router.post('/recurring', apiAuth, async (req, res) => {
     if (!amount || !frequencia) return res.status(400).json({ error: 'missing' });
     const freq = frequencia === 'dias' ? 'dias' : 'mensal';
     const intv = Math.max(1, Number(intervalo) || 1);
-    const d = Math.min(28, Math.max(1, Number(dia) || 1));
+    const d = normalizeDia(dia);
     const start = start_date ? String(start_date).slice(0, 10) : formatDate(new Date());
     const proximaData = firstOccurrence(freq, intv, d, start);
     const id = await createRecurring({
@@ -764,10 +765,14 @@ router.put('/recurring/:id', apiAuth, async (req, res) => {
     if (!amount || !frequencia) return res.status(400).json({ error: 'missing' });
     const freq = frequencia === 'dias' ? 'dias' : 'mensal';
     const intv = Math.max(1, Number(intervalo) || 1);
-    const d = Math.min(28, Math.max(1, Number(dia) || 1));
-    const anchor = start_date
-      ? String(start_date).slice(0, 10)
-      : (existing.proxima_data instanceof Date ? formatDate(existing.proxima_data) : String(existing.proxima_data).slice(0, 10));
+    const d = normalizeDia(dia);
+    // Mensal: recalcula sempre a partir de HOJE (evita datas antigas presas no
+    // futuro — ex.: salário "preso" em outubro). 'dias': mantém a âncora atual.
+    const anchor = freq === 'mensal'
+      ? formatDate(new Date())
+      : (start_date
+        ? String(start_date).slice(0, 10)
+        : (existing.proxima_data instanceof Date ? formatDate(existing.proxima_data) : String(existing.proxima_data).slice(0, 10)));
     const proximaData = firstOccurrence(freq, intv, d, anchor);
     await updateRecurring({
       groupId, id, tipo: tipo === 'income' ? 'income' : 'expense', categoryId: category_id || null,
@@ -795,6 +800,35 @@ router.post('/recurring/run', apiAuth, async (req, res) => {
   try {
     const created = await runDueRecurring(req.user.finance_group_id, req.user.id, formatDate(new Date()));
     return res.json({ ok: true, created });
+  } catch (err) {
+    return res.status(500).json({ error: 'server' });
+  }
+});
+
+// Lança UMA fixa já, com data de hoje, mesmo que ainda não esteja na altura
+// (ex.: o salário caiu mais cedo). Avança a próxima data para a ocorrência
+// seguinte à agendada, para não voltar a lançá-la.
+router.post('/recurring/:id/launch', apiAuth, async (req, res) => {
+  try {
+    const groupId = req.user.finance_group_id;
+    const id = Number(req.params.id);
+    const r = await getRecurringById(groupId, id);
+    if (!r) return res.status(404).json({ error: 'not_found' });
+    const toIso = (v) => (v instanceof Date ? formatDate(v) : String(v).slice(0, 10));
+    const occurredOn = formatDate(new Date());
+    await createTransaction({
+      groupId, userId: req.user.id,
+      type: r.tipo === 'income' ? 'income' : 'expense',
+      categoryId: r.categoria_id || null,
+      amount: Number(r.valor),
+      occurredOn,
+      description: r.descricao || null,
+      source: 'recorrente',
+      accountId: r.account_id || null,
+    });
+    const next = nextOccurrence(toIso(r.proxima_data), r.frequencia, r.intervalo, r.dia);
+    await setProximaData(groupId, id, next);
+    return res.json({ ok: true, created: 1, proxima_data: next });
   } catch (err) {
     return res.status(500).json({ error: 'server' });
   }

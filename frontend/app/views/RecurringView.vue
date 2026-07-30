@@ -43,9 +43,27 @@ const pending = computed(() => list.value.filter((r) => r.ativo && String(r.prox
 const filteredCats = computed(() => categories.value.filter((c) => (c.tipo) === form.value.tipo));
 
 function freqLabel(r) {
-  return r.frequencia === 'dias' ? `a cada ${r.intervalo} dias` : `todo dia ${r.dia}`;
+  if (r.frequencia === 'dias') return `a cada ${r.intervalo} dias`;
+  if (Number(r.dia) === 100) return 'último dia do mês';
+  if (Number(r.dia) === 99) return 'último dia útil';
+  return `todo dia ${r.dia}`;
 }
 function isDue(r) { return r.ativo && String(r.proxima_data).slice(0, 10) <= today.value; }
+
+async function launchNow(r) {
+  confirm.require({
+    message: `Lançar já "${r.descricao || r.categoria_nome || 'esta fixa'}" (${r.tipo === 'income' ? '+' : '−'}${fmtEurCents(r.valor)}) com data de hoje?`,
+    header: 'Lançar agora', icon: 'pi pi-bolt', acceptLabel: 'Lançar', rejectLabel: 'Cancelar',
+    accept: async () => {
+      try {
+        await api.post(`/recurring/${r.id}/launch`);
+        toast.add({ severity: 'success', summary: 'Lançado', detail: 'Movimento criado com data de hoje.', life: 3000 });
+        await load(true);
+        window.dispatchEvent(new CustomEvent('financeiro:tx-changed'));
+      } catch (e) { /* */ }
+    },
+  });
+}
 
 function add() { editing.value = null; form.value = blank(); dlg.value = true; }
 function edit(r) {
@@ -125,8 +143,9 @@ async function run() {
             </div>
           </div>
           <div class="r-amount" :class="r.tipo === 'income' ? 'pos' : 'neg'">{{ r.tipo === 'income' ? '+' : '−' }}{{ fmtEurCents(r.valor) }}</div>
-          <button class="icon-btn" @click="edit(r)"><i class="pi pi-pencil" /></button>
-          <button class="icon-btn danger" @click="remove(r)"><i class="pi pi-trash" /></button>
+          <button class="icon-btn launch" :disabled="!r.ativo" @click="launchNow(r)" aria-label="Lançar agora" title="Lançar agora"><i class="pi pi-bolt" /></button>
+          <button class="icon-btn" @click="edit(r)" aria-label="Editar"><i class="pi pi-pencil" /></button>
+          <button class="icon-btn danger" @click="remove(r)" aria-label="Eliminar"><i class="pi pi-trash" /></button>
         </div>
       </div>
     </section>
@@ -152,7 +171,12 @@ async function run() {
           </div>
         </label>
         <label v-if="form.frequencia === 'mensal'" class="field"><span>Dia do mês</span>
-          <select v-model.number="form.dia"><option v-for="d in 28" :key="d" :value="d">Dia {{ d }}</option></select>
+          <select v-model.number="form.dia">
+            <option v-for="d in 31" :key="d" :value="d">Dia {{ d }}</option>
+            <option :value="100">Último dia do mês</option>
+            <option :value="99">Último dia útil (evita fim de semana)</option>
+          </select>
+          <small v-if="form.dia === 99 || form.dia === 100" class="hint-sm">Ideal para o salário — cai sempre no fim do mês, mesmo em meses curtos.</small>
         </label>
         <template v-else>
           <label class="field"><span>A cada quantos dias</span><input v-model.number="form.intervalo" type="number" min="1" max="365" inputmode="numeric" /></label>
@@ -189,6 +213,9 @@ async function run() {
 .seg-btn.on { background: var(--brand-soft); border-color: var(--brand); color: var(--brand); }
 .seg-btn.on.expense { background: var(--danger-soft); border-color: var(--danger); color: var(--danger); }
 .seg-btn.on.income { background: var(--success-soft); border-color: var(--success); color: var(--success); }
+.icon-btn.launch { color: var(--brand); }
+.icon-btn.launch:disabled { opacity: 0.35; cursor: default; }
+.hint-sm { color: var(--ink-3); font-size: 0.76rem; margin-top: 0.25rem; }
 .check { display: flex; align-items: center; gap: 0.6rem; font-size: 0.9rem; color: var(--ink-2); cursor: pointer; }
 .check input { width: auto; min-height: 0; }
 .actions { display: flex; gap: 0.6rem; justify-content: flex-end; }

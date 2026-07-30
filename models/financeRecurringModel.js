@@ -44,10 +44,38 @@ async function ensureTable() {
 }
 
 // ── Date helpers (string YYYY-MM-DD, sem timezone) ──────────────────────
+// Sentinelas do `dia` (mesmas do ciclo de salário): valores que significam uma
+// regra em vez de um dia fixo, guardados na coluna `dia` sem mexer no schema.
+const LAST_BUSINESS = 99;  // último dia útil do mês
+const LAST_CALENDAR = 100; // último dia do mês (civil)
+
 function daysInMonth(y, m) { return new Date(y, m + 1, 0).getDate(); } // m 0-based
 function pad(n) { return String(n).padStart(2, '0'); }
 function iso(y, m, d) { return `${y}-${pad(m + 1)}-${pad(d)}`; }
 function parse(s) { const [y, m, d] = String(s).slice(0, 10).split('-').map(Number); return { y, m: m - 1, d }; }
+
+function lastBusinessDayOfMonth(y, m) {
+  let d = daysInMonth(y, m);
+  const dow = new Date(y, m, d).getDay();
+  if (dow === 6) d -= 1;        // Sáb → Sex
+  else if (dow === 0) d -= 2;   // Dom → Sex
+  return d;
+}
+
+// Resolve o dia concreto do mês (y, m) a partir de `dia`, tratando as sentinelas.
+function resolveDay(y, m, dia) {
+  const n = Number(dia);
+  if (n === LAST_CALENDAR) return daysInMonth(y, m);
+  if (n === LAST_BUSINESS) return lastBusinessDayOfMonth(y, m);
+  return Math.min(Math.max(1, Math.floor(n) || 1), daysInMonth(y, m));
+}
+
+// Normaliza um `dia` vindo do cliente: preserva sentinelas, senão 1..31.
+function normalizeDia(v) {
+  const n = Number(v);
+  if (n === LAST_BUSINESS || n === LAST_CALENDAR) return n;
+  return Math.min(31, Math.max(1, Math.floor(n) || 1));
+}
 
 function addDays(isoStr, n) {
   const { y, m, d } = parse(isoStr);
@@ -57,22 +85,22 @@ function addDays(isoStr, n) {
 function addMonthOnDay(isoStr, dia) {
   const { y, m } = parse(isoStr);
   const nm = m + 1; const ny = y + Math.floor(nm / 12); const nmo = nm % 12;
-  return iso(ny, nmo, Math.min(dia, daysInMonth(ny, nmo)));
+  return iso(ny, nmo, resolveDay(ny, nmo, dia));
 }
 
 // Próxima ocorrência a partir da atual.
 function nextOccurrence(currentIso, frequencia, intervalo, dia) {
   if (frequencia === 'dias') return addDays(currentIso, Math.max(1, Number(intervalo) || 1));
-  return addMonthOnDay(currentIso, Number(dia) || 1);
+  return addMonthOnDay(currentIso, dia);
 }
 
-// Primeira ocorrência ao criar/editar.
+// Primeira ocorrência ao criar/editar (a partir de `startIso`, tipicamente hoje).
 function firstOccurrence(frequencia, intervalo, dia, startIso) {
   if (frequencia === 'dias') return String(startIso).slice(0, 10);
   const { y, m, d } = parse(startIso);
-  const day = Math.min(Number(dia) || 1, daysInMonth(y, m));
+  const day = resolveDay(y, m, dia);
   if (d <= day) return iso(y, m, day);
-  return addMonthOnDay(iso(y, m, d), Number(dia) || 1);
+  return addMonthOnDay(iso(y, m, d), dia);
 }
 
 // ── CRUD ────────────────────────────────────────────────────────────────
@@ -181,4 +209,7 @@ module.exports = {
   countDue,
   nextOccurrence,
   firstOccurrence,
+  normalizeDia,
+  LAST_BUSINESS,
+  LAST_CALENDAR,
 };
