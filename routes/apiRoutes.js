@@ -836,7 +836,11 @@ router.post('/recurring/:id/launch', apiAuth, async (req, res) => {
       source: 'recorrente',
       accountId: r.account_id || null,
     });
-    const next = nextOccurrence(toIso(r.proxima_data), r.frequencia, r.intervalo, r.dia);
+    // Avança a próxima data para a ocorrência SEGUINTE à agendada — e garante que
+    // fica estritamente no futuro (nunca hoje/passado), para não voltar a lançar.
+    let next = nextOccurrence(toIso(r.proxima_data), r.frequencia, r.intervalo, r.dia);
+    let guard = 0;
+    while (next <= occurredOn && guard < 60) { next = nextOccurrence(next, r.frequencia, r.intervalo, r.dia); guard += 1; }
     await setProximaData(groupId, id, next);
     return res.json({ ok: true, created: 1, proxima_data: next });
   } catch (err) {
