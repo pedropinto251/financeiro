@@ -721,13 +721,24 @@ router.delete('/transfers/:id', apiAuth, async (req, res) => {
 // ── Movimentos recorrentes (fixos) ───────────────────────────────────────
 router.get('/recurring', apiAuth, async (req, res) => {
   try {
-    const rows = await listRecurring(req.user.finance_group_id);
+    const groupId = req.user.finance_group_id;
+    const rows = await listRecurring(groupId);
+    const today = formatDate(new Date());
     // Normaliza DATE (objeto Date do mysql2) → 'YYYY-MM-DD' local, evita timezone no cliente.
-    const items = rows.map((r) => ({
-      ...r,
-      proxima_data: r.proxima_data instanceof Date ? formatDate(r.proxima_data) : String(r.proxima_data).slice(0, 10),
-    }));
-    return res.json({ items, today: formatDate(new Date()) });
+    // Auto-correção: fixas MENSAIS cuja próxima data ficou presa no futuro (bug
+    // antigo — ex.: salário "preso" em outubro) são recalculadas para a próxima
+    // ocorrência real a partir de hoje. Só puxa datas para trás, nunca para a
+    // frente (as pendentes/em atraso ficam para o cron lançar).
+    const items = [];
+    for (const r of rows) {
+      let prox = r.proxima_data instanceof Date ? formatDate(r.proxima_data) : String(r.proxima_data).slice(0, 10);
+      if (r.ativo && r.frequencia === 'mensal') {
+        const correct = firstOccurrence('mensal', r.intervalo, r.dia, today);
+        if (prox > correct) { await setProximaData(groupId, r.id, correct); prox = correct; }
+      }
+      items.push({ ...r, proxima_data: prox });
+    }
+    return res.json({ items, today });
   } catch (err) {
     return res.status(500).json({ error: 'server' });
   }
