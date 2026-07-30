@@ -1,1 +1,1 @@
-restart 2026-07-30T14:51:07Z launch-future-guard
+restart 2026-07-30T15:20:59Z cycle-advance

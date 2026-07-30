@@ -1,6 +1,6 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
-const { getSimUserByEmail, getSimUserById, listSimUsers, validateSimPassword, updateUserCycle } = require('../models/simulatorUserModel');
+const { getSimUserByEmail, getSimUserById, listSimUsers, validateSimPassword, updateUserCycle, updateCycleOverride } = require('../models/simulatorUserModel');
 const push = require('../services/push');
 const pushModel = require('../models/financePushModel');
 const { ensureGroupForUser, linkUserToGroupByEmail, listGroupMembers, removeMemberFromGroup } = require('../models/financeGroupModel');
@@ -120,7 +120,16 @@ function getUserCycleSettings(user) {
   );
   const adjustWeekendRaw = user?.cycle_next_business_day ?? user?.ciclo_proximo_util;
   const adjustWeekend = adjustWeekendRaw === true || adjustWeekendRaw === 1 || adjustWeekendRaw === '1';
-  return { cycleDay, adjustWeekend };
+  // Início de ciclo manual ("já recebi o salário mais cedo"): aplica-se só ao mês
+  // dessa data (ver financePeriod.getCycleStartForMonth).
+  let overrideStart = null;
+  const ov = user?.ciclo_inicio_manual;
+  if (ov) {
+    const s = ov instanceof Date ? formatDate(ov) : String(ov).slice(0, 10);
+    const [y, m, d] = s.split('-').map(Number);
+    if (y && m && d) overrideStart = new Date(y, m - 1, d);
+  }
+  return { cycleDay, adjustWeekend, overrideStart };
 }
 
 const router = express.Router();
@@ -196,6 +205,29 @@ router.put('/me/cycle', apiAuth, async (req, res) => {
       req.session.simUser.cycle_next_business_day = adjust;
     }
     return res.json({ ok: true, cycle_day: day, cycle_next_business_day: adjust });
+  } catch (err) {
+    return res.status(500).json({ error: 'server' });
+  }
+});
+
+// "Já recebi o salário — avançar ciclo": marca hoje (ou uma data dada) como
+// início do ciclo deste mês. Útil quando o salário cai mais cedo que o habitual.
+// A partir de hoje, o ciclo atual passa a começar nesta data (só afeta este mês).
+router.post('/cycle/advance', apiAuth, async (req, res) => {
+  try {
+    const date = req.body && req.body.date ? String(req.body.date).slice(0, 10) : formatDate(new Date());
+    await updateCycleOverride({ id: req.user.id, date });
+    return res.json({ ok: true, cycle_start: date });
+  } catch (err) {
+    return res.status(500).json({ error: 'server' });
+  }
+});
+
+// Anula o início de ciclo manual (volta à regra do dia configurado).
+router.post('/cycle/reset', apiAuth, async (req, res) => {
+  try {
+    await updateCycleOverride({ id: req.user.id, date: null });
+    return res.json({ ok: true });
   } catch (err) {
     return res.status(500).json({ error: 'server' });
   }
@@ -290,8 +322,8 @@ router.get('/cron/notify', async (req, res) => {
       if (user.ativo === 0) continue;
       const userId = user.id;
       const groupId = await ensureGroupForUser(user);
-      const { cycleDay, adjustWeekend } = getUserCycleSettings(user);
-      const { start, end } = getCyclePeriod(new Date(), cycleDay, adjustWeekend);
+      const { cycleDay, adjustWeekend, overrideStart } = getUserCycleSettings(user);
+      const { start, end } = getCyclePeriod(new Date(), cycleDay, adjustWeekend, overrideStart);
       const startIso = formatDate(start);
       const endIso = formatDate(end);
       const todayDate = new Date(); todayDate.setHours(0, 0, 0, 0);
@@ -438,8 +470,8 @@ router.get('/budgets', apiAuth, async (req, res) => {
   try {
     const groupId = req.user.finance_group_id;
     const now = new Date();
-    const { cycleDay, adjustWeekend } = getUserCycleSettings(req.user);
-    const { start, end } = getCyclePeriod(now, cycleDay, adjustWeekend);
+    const { cycleDay, adjustWeekend, overrideStart } = getUserCycleSettings(req.user);
+    const { start, end } = getCyclePeriod(now, cycleDay, adjustWeekend, overrideStart);
     const [budgets, spend] = await Promise.all([
       listBudgets(groupId),
       getExpenseByCategory(groupId, formatDate(start), formatDate(end)),
@@ -852,8 +884,8 @@ router.get('/dashboard', apiAuth, async (req, res) => {
   try {
     const groupId = req.user.finance_group_id;
     const now = new Date();
-    const { cycleDay, adjustWeekend } = getUserCycleSettings(req.user);
-    const { start, end } = getCyclePeriod(now, cycleDay, adjustWeekend);
+    const { cycleDay, adjustWeekend, overrideStart } = getUserCycleSettings(req.user);
+    const { start, end } = getCyclePeriod(now, cycleDay, adjustWeekend, overrideStart);
     const yearStartDate = new Date(now.getFullYear(), 0, 1);
     const yearEndDate = new Date(now.getFullYear(), 11, 31);
     // Tendência por CICLO (não por mês civil): cada barra é um ciclo do utilizador,
@@ -864,13 +896,13 @@ router.get('/dashboard', apiAuth, async (req, res) => {
     {
       let ref = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       for (let i = 0; i < 6; i++) {
-        const p = getCyclePeriod(ref, cycleDay, adjustWeekend);
+        const p = getCyclePeriod(ref, cycleDay, adjustWeekend, overrideStart);
         cycles.unshift(p);
         ref = new Date(p.start.getFullYear(), p.start.getMonth(), p.start.getDate() - 1);
       }
     }
     // Ciclo anterior (para comparação) = penúltimo da lista.
-    const prevPeriod = cycles[cycles.length - 2] || getCyclePeriod(new Date(start.getFullYear(), start.getMonth(), start.getDate() - 1), cycleDay, adjustWeekend);
+    const prevPeriod = cycles[cycles.length - 2] || getCyclePeriod(new Date(start.getFullYear(), start.getMonth(), start.getDate() - 1), cycleDay, adjustWeekend, overrideStart);
 
     const [
       summary,
@@ -978,6 +1010,7 @@ router.get('/dashboard', apiAuth, async (req, res) => {
       cycle: {
         start: formatDate(start),
         end: formatDate(end),
+        overridden: !!overrideStart,
       },
       trend,
       accounts: accounts || [],
@@ -998,11 +1031,11 @@ router.get('/dashboard', apiAuth, async (req, res) => {
 });
 
 // ── Estatísticas (comparar ciclos) ───────────────────────────────────────
-function buildCyclesBack(now, cycleDay, adjustWeekend, n) {
+function buildCyclesBack(now, cycleDay, adjustWeekend, n, overrideStart) {
   const cycles = [];
   let ref = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   for (let i = 0; i < n; i++) {
-    const p = getCyclePeriod(ref, cycleDay, adjustWeekend);
+    const p = getCyclePeriod(ref, cycleDay, adjustWeekend, overrideStart);
     cycles.unshift(p);
     ref = new Date(p.start.getFullYear(), p.start.getMonth(), p.start.getDate() - 1);
   }
@@ -1017,9 +1050,9 @@ function cycleLabel(c) {
 router.get('/stats/series', apiAuth, async (req, res) => {
   try {
     const groupId = req.user.finance_group_id;
-    const { cycleDay, adjustWeekend } = getUserCycleSettings(req.user);
+    const { cycleDay, adjustWeekend, overrideStart } = getUserCycleSettings(req.user);
     const n = Math.min(24, Math.max(3, Number(req.query.n) || 12));
-    const cycles = buildCyclesBack(new Date(), cycleDay, adjustWeekend, n);
+    const cycles = buildCyclesBack(new Date(), cycleDay, adjustWeekend, n, overrideStart);
     // Só contas reais contam para a poupança do gráfico (cartão refeição fora).
     const sums = await Promise.all(cycles.map((c) => getMonthlySummarySplit(groupId, formatDate(c.start), formatDate(c.end))));
     const out = cycles.map((c, i) => {
@@ -1037,17 +1070,17 @@ router.get('/stats/series', apiAuth, async (req, res) => {
 router.get('/stats/cycle', apiAuth, async (req, res) => {
   try {
     const groupId = req.user.finance_group_id;
-    const { cycleDay, adjustWeekend } = getUserCycleSettings(req.user);
+    const { cycleDay, adjustWeekend, overrideStart } = getUserCycleSettings(req.user);
     const offset = Math.max(0, Math.min(60, Number(req.query.offset) || 0));
     let ref = new Date();
     ref = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate());
-    let cur = getCyclePeriod(ref, cycleDay, adjustWeekend);
+    let cur = getCyclePeriod(ref, cycleDay, adjustWeekend, overrideStart);
     for (let i = 0; i < offset; i++) {
       ref = new Date(cur.start.getFullYear(), cur.start.getMonth(), cur.start.getDate() - 1);
-      cur = getCyclePeriod(ref, cycleDay, adjustWeekend);
+      cur = getCyclePeriod(ref, cycleDay, adjustWeekend, overrideStart);
     }
     const prevRef = new Date(cur.start.getFullYear(), cur.start.getMonth(), cur.start.getDate() - 1);
-    const prev = getCyclePeriod(prevRef, cycleDay, adjustWeekend);
+    const prev = getCyclePeriod(prevRef, cycleDay, adjustWeekend, overrideStart);
     const [sum, prevSum, breakdown, expenseTx] = await Promise.all([
       getMonthlySummarySplit(groupId, formatDate(cur.start), formatDate(cur.end)),
       getMonthlySummarySplit(groupId, formatDate(prev.start), formatDate(prev.end)),

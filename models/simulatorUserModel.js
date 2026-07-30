@@ -3,7 +3,7 @@ const pool = require('../config/db');
 
 async function getSimUserByEmail(email) {
 	const [rows] = await pool.query(
-		`SELECT id, nome, email, password_hash, role, ativo, finance_group_id, ciclo_dia, ciclo_proximo_util
+		`SELECT id, nome, email, password_hash, role, ativo, finance_group_id, ciclo_dia, ciclo_proximo_util, ciclo_inicio_manual
 		 FROM simulador_utilizadores
 		 WHERE email = ?`,
 		[email]
@@ -13,7 +13,7 @@ async function getSimUserByEmail(email) {
 
 async function getSimUserById(id) {
 	const [rows] = await pool.query(
-		`SELECT id, nome, email, role, ativo, finance_group_id, ciclo_dia, ciclo_proximo_util
+		`SELECT id, nome, email, role, ativo, finance_group_id, ciclo_dia, ciclo_proximo_util, ciclo_inicio_manual
 		 FROM simulador_utilizadores
 		 WHERE id = ?`,
 		[id]
@@ -28,7 +28,7 @@ async function validateSimPassword(user, password) {
 
 async function listSimUsers() {
 	const [rows] = await pool.query(
-		`SELECT id, nome, email, role, ativo, finance_group_id, ciclo_dia, ciclo_proximo_util, data_criado
+		`SELECT id, nome, email, role, ativo, finance_group_id, ciclo_dia, ciclo_proximo_util, ciclo_inicio_manual, data_criado
 		 FROM simulador_utilizadores
 		 ORDER BY data_criado DESC`
 	);
@@ -76,6 +76,31 @@ async function updateUserCycle({ id, cycleDay, cycleNextBusinessDay }) {
 	);
 }
 
+// Início de ciclo manual ("já recebi o salário"): guarda uma data (YYYY-MM-DD)
+// ou null para limpar. Garante a coluna à primeira utilização (sem migração).
+let cycleOverrideColReady = false;
+async function ensureCycleOverrideColumn() {
+	if (cycleOverrideColReady) return;
+	try {
+		const [cols] = await pool.query(
+			`SELECT COUNT(*) AS n FROM information_schema.COLUMNS
+			 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'simulador_utilizadores' AND COLUMN_NAME = 'ciclo_inicio_manual'`
+		);
+		if (!cols[0] || Number(cols[0].n) === 0) {
+			await pool.query('ALTER TABLE simulador_utilizadores ADD COLUMN ciclo_inicio_manual DATE NULL');
+		}
+		cycleOverrideColReady = true;
+	} catch (e) { /* sem privilégio de ALTER → segue sem override */ }
+}
+
+async function updateCycleOverride({ id, date }) {
+	await ensureCycleOverrideColumn();
+	await pool.query(
+		`UPDATE simulador_utilizadores SET ciclo_inicio_manual = ? WHERE id = ?`,
+		[date || null, id]
+	);
+}
+
 async function getSimUserByEmailExceptId(email, id) {
 	const [rows] = await pool.query(
 		`SELECT id FROM simulador_utilizadores WHERE email = ? AND id <> ?`,
@@ -92,5 +117,6 @@ module.exports = {
 	createSimUser,
 	updateSimUser,
 	updateUserCycle,
+	updateCycleOverride,
 	getSimUserByEmailExceptId,
 };

@@ -37,6 +37,26 @@ async function runRecurring() {
   } catch (e) { /* */ } finally { running.value = false; }
 }
 
+const advancing = ref(false);
+async function advanceCycle() {
+  advancing.value = true;
+  try {
+    await api.post('/cycle/advance');
+    toast.add({ severity: 'success', summary: 'Novo ciclo iniciado', detail: 'A partir de hoje conta para o novo ciclo.', life: 3500 });
+    await refresh();
+    window.dispatchEvent(new CustomEvent('financeiro:tx-changed'));
+  } catch (e) { /* */ } finally { advancing.value = false; }
+}
+async function resetCycle() {
+  advancing.value = true;
+  try {
+    await api.post('/cycle/reset');
+    toast.add({ severity: 'success', summary: 'Ciclo reposto', detail: 'Voltou ao dia configurado.', life: 3000 });
+    await refresh();
+    window.dispatchEvent(new CustomEvent('financeiro:tx-changed'));
+  } catch (e) { /* */ } finally { advancing.value = false; }
+}
+
 const onExternalChange = () => { refresh().catch(() => {}); };
 onMounted(async () => {
   try { await refresh(); } catch (e) { /* toast */ } finally { loading.value = false; }
@@ -173,8 +193,13 @@ async function onSaved() { try { await refresh(); } catch (e) { /* */ } }
         </div>
         <div class="hero-foot" v-if="daysToSalary !== null">
           <i class="pi pi-calendar-clock" />
-          <span v-if="daysToSalary === 0">Recebes salário hoje 🎉</span>
+          <span v-if="cycle?.overridden">Ciclo avançado manualmente</span>
+          <span v-else-if="daysToSalary === 0">Recebes salário hoje 🎉</span>
           <span v-else>Próximo salário em <strong>{{ daysToSalary }}</strong> {{ daysToSalary === 1 ? 'dia' : 'dias' }}</span>
+          <button v-if="cycle?.overridden" class="cyc-btn" :disabled="advancing" @click="resetCycle">Desfazer</button>
+          <button v-else-if="daysToSalary !== null && daysToSalary <= 5" class="cyc-btn" :disabled="advancing" @click="advanceCycle">
+            <i v-if="advancing" class="pi pi-spin pi-spinner" /> Já recebi — avançar ciclo
+          </button>
         </div>
       </section>
 
@@ -360,7 +385,10 @@ async function onSaved() { try { await refresh(); } catch (e) { /* */ } }
 .ha-val { font-family: var(--font-display); font-weight: 700; font-size: 1.35rem; line-height: 1; }
 .hero-sub { font-size: 0.82rem; opacity: 0.9; margin-top: 0.15rem; }
 .sep-tag { margin-left: 0.45rem; font-size: 0.64rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--ink-4); background: var(--line); border-radius: var(--radius-pill); padding: 0.08rem 0.45rem; }
-.hero-foot { display: flex; align-items: center; gap: 0.5rem; margin-top: 1rem; padding-top: 0.85rem; border-top: 1px solid rgba(255,255,255,0.22); font-size: 0.88rem; position: relative; }
+.hero-foot { display: flex; align-items: center; gap: 0.5rem; margin-top: 1rem; padding-top: 0.85rem; border-top: 1px solid rgba(255,255,255,0.22); font-size: 0.88rem; position: relative; flex-wrap: wrap; }
+.cyc-btn { margin-left: auto; background: rgba(255,255,255,0.18); color: #fff; border: 1px solid rgba(255,255,255,0.35); border-radius: var(--radius-pill); padding: 0.32rem 0.7rem; font-size: 0.78rem; font-weight: 600; font-family: inherit; cursor: pointer; white-space: nowrap; }
+.cyc-btn:active { background: rgba(255,255,255,0.28); }
+.cyc-btn:disabled { opacity: 0.6; }
 
 /* Este ciclo */
 .cycle-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }

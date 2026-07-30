@@ -38,7 +38,16 @@ function adjustToPrevBusinessDay(date) {
   return d;
 }
 
-function getCycleStartForMonth(year, monthIndex, cycleDay, adjustWeekend) {
+// `overrideStart` (Date | null): início de ciclo manual ("já recebi o salário").
+// Aplica-se APENAS ao mês a que a data pertence — nesse mês o ciclo começa nesse
+// dia em vez da regra. Nos outros meses a regra normal mantém-se, por isso é
+// naturalmente pontual (o mês seguinte volta ao habitual).
+function getCycleStartForMonth(year, monthIndex, cycleDay, adjustWeekend, overrideStart) {
+  if (overrideStart instanceof Date
+      && overrideStart.getFullYear() === year
+      && overrideStart.getMonth() === monthIndex) {
+    return new Date(year, monthIndex, overrideStart.getDate());
+  }
   const dayNum = Number(cycleDay);
   if (dayNum === CYCLE_LAST_CALENDAR) {
     return new Date(year, monthIndex, daysInMonth(year, monthIndex));
@@ -54,25 +63,26 @@ function getCycleStartForMonth(year, monthIndex, cycleDay, adjustWeekend) {
   return start;
 }
 
-function getCyclePeriodForMonth(year, monthIndex, cycleDay, adjustWeekend) {
-  const start = getCycleStartForMonth(year, monthIndex, cycleDay, adjustWeekend);
+function getCyclePeriodForMonth(year, monthIndex, cycleDay, adjustWeekend, overrideStart) {
+  const start = getCycleStartForMonth(year, monthIndex, cycleDay, adjustWeekend, overrideStart);
   const nextBase = new Date(year, monthIndex + 1, 1);
   const nextStart = getCycleStartForMonth(
     nextBase.getFullYear(),
     nextBase.getMonth(),
     cycleDay,
-    adjustWeekend
+    adjustWeekend,
+    overrideStart
   );
   const end = new Date(nextStart.getFullYear(), nextStart.getMonth(), nextStart.getDate() - 1);
   return { start, end, cycleYear: year, cycleMonth: monthIndex, nextStart };
 }
 
-function getCyclePeriod(referenceDate, cycleDay, adjustWeekend) {
+function getCyclePeriod(referenceDate, cycleDay, adjustWeekend, overrideStart) {
   const ref = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate());
   const year = ref.getFullYear();
   const month = ref.getMonth();
 
-  const currentStart = getCycleStartForMonth(year, month, cycleDay, adjustWeekend);
+  const currentStart = getCycleStartForMonth(year, month, cycleDay, adjustWeekend, overrideStart);
   let cycleYear = year;
   let cycleMonth = month;
   let start = currentStart;
@@ -81,7 +91,7 @@ function getCyclePeriod(referenceDate, cycleDay, adjustWeekend) {
     const prev = new Date(year, month - 1, 1);
     cycleYear = prev.getFullYear();
     cycleMonth = prev.getMonth();
-    start = getCycleStartForMonth(cycleYear, cycleMonth, cycleDay, adjustWeekend);
+    start = getCycleStartForMonth(cycleYear, cycleMonth, cycleDay, adjustWeekend, overrideStart);
   }
 
   const nextBase = new Date(cycleYear, cycleMonth + 1, 1);
@@ -89,7 +99,8 @@ function getCyclePeriod(referenceDate, cycleDay, adjustWeekend) {
     nextBase.getFullYear(),
     nextBase.getMonth(),
     cycleDay,
-    adjustWeekend
+    adjustWeekend,
+    overrideStart
   );
   const end = new Date(nextStart.getFullYear(), nextStart.getMonth(), nextStart.getDate() - 1);
 
