@@ -20,7 +20,7 @@ const editing = ref(null);
 const busy = ref(false);
 
 const defaultAccountId = () => { const d = accounts.value.find((a) => a.is_default) || accounts.value[0]; return d ? d.id : ''; };
-const blank = () => ({ tipo: 'expense', amount: null, description: '', category_id: '', frequencia: 'mensal', intervalo: 15, dia: 1, start_date: todayIso(), ativo: true, account_id: defaultAccountId() });
+const blank = () => ({ tipo: 'expense', amount: null, description: '', category_id: '', frequencia: 'mensal', intervalo: 15, dia: 1, start_date: todayIso(), next_date: todayIso(), ativo: true, account_id: defaultAccountId() });
 const form = ref(blank());
 
 async function load(silent = false) {
@@ -71,7 +71,7 @@ function edit(r) {
   form.value = {
     tipo: r.tipo, amount: Number(r.valor), description: r.descricao || '', category_id: r.categoria_id || '',
     frequencia: r.frequencia, intervalo: r.intervalo, dia: r.dia,
-    start_date: String(r.proxima_data).slice(0, 10), ativo: !!r.ativo,
+    start_date: String(r.proxima_data).slice(0, 10), next_date: String(r.proxima_data).slice(0, 10), ativo: !!r.ativo,
     account_id: r.account_id || defaultAccountId(),
   };
   dlg.value = true;
@@ -83,7 +83,8 @@ async function save() {
   const payload = {
     tipo: form.value.tipo, amount: form.value.amount, description: form.value.description || null,
     category_id: form.value.category_id || null, frequencia: form.value.frequencia,
-    intervalo: form.value.intervalo, dia: form.value.dia, start_date: form.value.start_date, ativo: form.value.ativo,
+    intervalo: form.value.intervalo, dia: form.value.dia, start_date: form.value.start_date,
+    next_date: form.value.next_date, ativo: form.value.ativo,
     account_id: form.value.account_id || null,
   };
   try {
@@ -182,6 +183,10 @@ async function run() {
           <label class="field"><span>A cada quantos dias</span><input v-model.number="form.intervalo" type="number" min="1" max="365" inputmode="numeric" /></label>
           <label class="field"><span>Primeiro lançamento</span><input v-model="form.start_date" type="date" /></label>
         </template>
+        <label v-if="editing" class="field"><span>Próxima ocorrência</span>
+          <input v-model="form.next_date" type="date" />
+          <small class="hint-sm">Corrige aqui a próxima data se estiver errada. Muda sozinha só se alterares o dia/frequência.</small>
+        </label>
         <label class="check"><input type="checkbox" v-model="form.ativo" /><span>Ativa</span></label>
         <div class="actions">
           <button type="button" class="btn btn-ghost" @click="dlg = false">Cancelar</button>

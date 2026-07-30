@@ -721,24 +721,15 @@ router.delete('/transfers/:id', apiAuth, async (req, res) => {
 // ── Movimentos recorrentes (fixos) ───────────────────────────────────────
 router.get('/recurring', apiAuth, async (req, res) => {
   try {
-    const groupId = req.user.finance_group_id;
-    const rows = await listRecurring(groupId);
-    const today = formatDate(new Date());
+    const rows = await listRecurring(req.user.finance_group_id);
     // Normaliza DATE (objeto Date do mysql2) → 'YYYY-MM-DD' local, evita timezone no cliente.
-    // Auto-correção: fixas MENSAIS cuja próxima data ficou presa no futuro (bug
-    // antigo — ex.: salário "preso" em outubro) são recalculadas para a próxima
-    // ocorrência real a partir de hoje. Só puxa datas para trás, nunca para a
-    // frente (as pendentes/em atraso ficam para o cron lançar).
-    const items = [];
-    for (const r of rows) {
-      let prox = r.proxima_data instanceof Date ? formatDate(r.proxima_data) : String(r.proxima_data).slice(0, 10);
-      if (r.ativo && r.frequencia === 'mensal') {
-        const correct = firstOccurrence('mensal', r.intervalo, r.dia, today);
-        if (prox > correct) { await setProximaData(groupId, r.id, correct); prox = correct; }
-      }
-      items.push({ ...r, proxima_data: prox });
-    }
-    return res.json({ items, today });
+    // NÃO mexemos na proxima_data aqui — é a fonte de verdade (respeita lançamentos
+    // antecipados). Correções de data fazem-se ao editar a fixa.
+    const items = rows.map((r) => ({
+      ...r,
+      proxima_data: r.proxima_data instanceof Date ? formatDate(r.proxima_data) : String(r.proxima_data).slice(0, 10),
+    }));
+    return res.json({ items, today: formatDate(new Date()) });
   } catch (err) {
     return res.status(500).json({ error: 'server' });
   }
@@ -772,19 +763,27 @@ router.put('/recurring/:id', apiAuth, async (req, res) => {
     const id = Number(req.params.id);
     const existing = await getRecurringById(groupId, id);
     if (!existing) return res.status(404).json({ error: 'not_found' });
-    const { tipo, amount, description, category_id, frequencia, intervalo, dia, start_date, ativo } = req.body || {};
+    const { tipo, amount, description, category_id, frequencia, intervalo, dia, next_date, ativo } = req.body || {};
     if (!amount || !frequencia) return res.status(400).json({ error: 'missing' });
     const freq = frequencia === 'dias' ? 'dias' : 'mensal';
     const intv = Math.max(1, Number(intervalo) || 1);
     const d = normalizeDia(dia);
-    // Mensal: recalcula sempre a partir de HOJE (evita datas antigas presas no
-    // futuro — ex.: salário "preso" em outubro). 'dias': mantém a âncora atual.
-    const anchor = freq === 'mensal'
-      ? formatDate(new Date())
-      : (start_date
-        ? String(start_date).slice(0, 10)
-        : (existing.proxima_data instanceof Date ? formatDate(existing.proxima_data) : String(existing.proxima_data).slice(0, 10)));
-    const proximaData = firstOccurrence(freq, intv, d, anchor);
+    const toIso = (v) => (v instanceof Date ? formatDate(v) : String(v).slice(0, 10));
+    // Só recalculamos a próxima data quando o CALENDÁRIO muda (frequência, dia
+    // do mês ou intervalo). Caso contrário mantemos a data atual — assim editar
+    // o valor/descrição/conta NÃO faz reset (e respeita lançamentos antecipados).
+    // `next_date` permite ao utilizador corrigir a data à mão.
+    const scheduleChanged = freq !== existing.frequencia
+      || (freq === 'mensal' && normalizeDia(existing.dia) !== d)
+      || (freq === 'dias' && Number(existing.intervalo) !== intv);
+    let proximaData;
+    if (scheduleChanged) {
+      proximaData = firstOccurrence(freq, intv, d, formatDate(new Date()));
+    } else if (next_date) {
+      proximaData = String(next_date).slice(0, 10);
+    } else {
+      proximaData = toIso(existing.proxima_data);
+    }
     await updateRecurring({
       groupId, id, tipo: tipo === 'income' ? 'income' : 'expense', categoryId: category_id || null,
       amount: Number(amount), descricao: description || null, frequencia: freq, intervalo: intv,
